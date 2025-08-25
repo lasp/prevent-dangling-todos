@@ -1,0 +1,8 @@
+- id: prevent-dangling-todos
+  name: prevent dangling todos
+  description: Check for TODO/FIXME comments without Jira issue references. Supports multiple Jira project prefixes and various file types.
+  entry: prevent-dangling-todos
+  language: python
+  types: [text]
+  exclude: '^\.pre-commit-config\.yaml$'
+  args: []

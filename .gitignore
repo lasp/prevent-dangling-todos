@@ -1,0 +1,81 @@
+# Compiled source #
+###################
+*.com
+*.class
+*.dll
+*.exe
+*.o
+*.so
+*.pyc
+*.pytest_cache
+__pycache__
+
+# Testing Artifacts #
+#####################
+.coverage*
+coverage_report
+corbertura_report.xml
+tests/test_data/hidden
+.mypy_cache
+.ruff_cache
+
+# Local Installation Artifacts #
+################################
+*.egg-info
+.eggs
+build
+dist
+libera_utils/_version.py
+poetry.lock
+package-lock.json
+
+# Packages #
+############
+# it's better to unpack these files and commit the raw source
+# git has its own built in compression methods
+*.7z
+*.dmg
+*.gz
+*.iso
+*.jar
+*.rar
+*.tar
+*.zip
+
+# Logs and databases #
+######################
+*.log
+*.sqlite
+
+# OS generated files #
+######################
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+
+# IDE generated files #
+#######################
+.idea
+.project
+.run
+out
+*.iml
+.vscode
+
+# Virtual environment #
+#######################
+venv
+.venv
+.env
+
+# Configurations #
+##################
+.python-version
+pytest.ini
+.devcontainer
+.claude
