@@ -210,3 +210,100 @@ class TestTodoChecker:
         # Should show multiple prefixes in error message format
         assert "ALPHA-XXXX|BETA-XXXX|GAMMA-XXXX" in captured.out
         assert "TODO: This is a violation" in captured.out
+
+    def test_succeed_always_initialization(self):
+        """Test TodoChecker initialization with succeed_always parameter."""
+        # Test default behavior (succeed_always=False)
+        checker = TodoChecker(jira_prefixes="MYJIRA")
+        assert checker.succeed_always is False
+
+        # Test explicit succeed_always=True
+        checker = TodoChecker(jira_prefixes="MYJIRA", succeed_always=True)
+        assert checker.succeed_always is True
+
+        # Test with other parameters
+        checker = TodoChecker(
+            jira_prefixes=["MYJIRA", "PROJECT"],
+            comment_prefixes=["TODO", "FIXME"],
+            quiet=True,
+            succeed_always=True,
+        )
+        assert checker.succeed_always is True
+        assert checker.quiet is True
+        assert checker.jira_prefixes == ["MYJIRA", "PROJECT"]
+
+    def test_succeed_always_exit_code_behavior(self, test_data_dir, capsys):
+        """Test exit code behavior with succeed_always flag."""
+        test_file = str(test_data_dir / "test_file_with_violations.py")
+
+        # Test 1: Normal behavior - should return 1 for violations
+        checker = TodoChecker(jira_prefixes="MYJIRA", succeed_always=False)
+        exit_code = checker.check_files([test_file])
+        assert exit_code == 1
+        assert checker.exit_code == 1  # Internal state should also be 1
+
+        # Test 2: succeed_always=True - should return 0 despite violations
+        checker_succeed = TodoChecker(jira_prefixes="MYJIRA", succeed_always=True)
+        exit_code = checker_succeed.check_files([test_file])
+        assert exit_code == 0  # Should return 0 due to succeed_always
+        assert checker_succeed.exit_code == 1  # Internal state should still track violations
+
+        captured = capsys.readouterr()
+        # Should still show violations in output
+        assert "❌" in captured.out
+        assert "Work comment missing Jira reference" in captured.out
+
+        # Test 3: Clean file with succeed_always - should return 0
+        clean_file = str(test_data_dir / "test_file_clean.py")
+        checker_succeed.exit_code = 0  # Reset
+        exit_code = checker_succeed.check_files([clean_file])
+        assert exit_code == 0
+        assert checker_succeed.exit_code == 0
+
+    def test_succeed_always_with_quiet_mode(self, test_data_dir, capsys):
+        """Test succeed_always behavior combined with quiet mode."""
+        test_file = str(test_data_dir / "test_file_with_violations.py")
+
+        checker = TodoChecker(
+            jira_prefixes="MYJIRA", 
+            quiet=True, 
+            succeed_always=True
+        )
+        exit_code = checker.check_files([test_file])
+        
+        assert exit_code == 0  # Should return 0 due to succeed_always
+        captured = capsys.readouterr()
+        
+        # Should show violations in quiet format
+        assert (
+            "test_file_with_violations.py:3: # TODO: This is a violation"
+            in captured.out
+        )
+        # Should not have decorative elements (quiet mode)
+        assert "🔍" not in captured.out
+        assert "❌" not in captured.out
+        assert "💡" not in captured.out
+
+    def test_succeed_always_preserves_logging_behavior(self, test_data_dir, capsys):
+        """Test that succeed_always doesn't change violation detection or logging."""
+        test_file = str(test_data_dir / "test_file_with_violations.py")
+
+        # Compare output between normal and succeed_always modes
+        checker_normal = TodoChecker(jira_prefixes="MYJIRA", succeed_always=False)
+        exit_code_normal = checker_normal.check_files([test_file])
+        output_normal = capsys.readouterr()
+
+        checker_succeed = TodoChecker(jira_prefixes="MYJIRA", succeed_always=True)
+        exit_code_succeed = checker_succeed.check_files([test_file])
+        output_succeed = capsys.readouterr()
+
+        # Exit codes should differ
+        assert exit_code_normal == 1
+        assert exit_code_succeed == 0
+
+        # But output should be identical (same logging behavior)
+        assert output_normal.out == output_succeed.out
+        assert output_normal.err == output_succeed.err
+
+        # Both should have detected the same violations internally
+        assert checker_normal.exit_code == checker_succeed.exit_code == 1

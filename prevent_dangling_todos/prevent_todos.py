@@ -26,6 +26,8 @@ class TodoChecker:
         List of comment prefixes to check (e.g., TODO, FIXME)
     quiet : bool
         Whether to suppress decorative output
+    succeed_always : bool
+        Whether to always exit with code 0 even when violations are found
     exit_code : int
         Track exit code for violations (0 = success, 1 = violations found)
     comment_pattern : re.Pattern
@@ -39,6 +41,7 @@ class TodoChecker:
         jira_prefixes: Union[str, List[str]],
         comment_prefixes: Optional[List[str]] = None,
         quiet: bool = False,
+        succeed_always: bool = False,
     ):
         """
         Initialize the TodoChecker.
@@ -51,6 +54,8 @@ class TodoChecker:
             Comment prefixes to check (e.g., ["TODO", "FIXME"]). If None, uses default list.
         quiet : bool, optional
             If True, only output violations without decorative text or tips. Default is False.
+        succeed_always : bool, optional
+            If True, always exit with code 0 even when violations are found. Default is False.
         """
         # Always store as list internally
         if isinstance(jira_prefixes, str):
@@ -59,6 +64,7 @@ class TodoChecker:
             self.jira_prefixes = jira_prefixes
 
         self.quiet = quiet
+        self.succeed_always = succeed_always
         self.exit_code = 0
 
         # Comment prefixes that should require Jira references
@@ -207,4 +213,5 @@ class TodoChecker:
                     other_prefixes = ", ".join(self.jira_prefixes[1:])
                     print(f"   (Also valid: {other_prefixes})")
 
-        return self.exit_code
+        # Return 0 if succeed_always is True, otherwise return the actual exit code
+        return 0 if self.succeed_always else self.exit_code

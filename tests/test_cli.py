@@ -225,3 +225,67 @@ class TestCLI:
         captured = capsys.readouterr()
         assert "Error: Jira project prefix(es) must be specified" in captured.err
         assert "Examples:" in captured.err
+
+    def test_succeed_always_cli_option(self, capsys):
+        """Test --succeed-always CLI option works correctly."""
+        test_file = str(self.test_data_dir / "test_file_with_violations.py")
+
+        # Test with violations but succeed_always should return 0
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-j", "MYJIRA", "--succeed-always", test_file])
+
+        assert exc_info.value.code == 0  # Should exit with 0 despite violations
+        captured = capsys.readouterr()
+
+        # Should still show violations (same output behavior)
+        assert "❌" in captured.out
+        assert "Work comment missing Jira reference" in captured.out
+        assert "TODO: This is a violation" in captured.out
+        assert "💡 Please add Jira issue references" in captured.out
+
+
+
+    def test_quiet_and_succeed_always_warning(self, capsys):
+        """Test warning when both --quiet and --succeed-always are used."""
+        test_file = str(self.test_data_dir / "test_file_with_violations.py")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-j", "MYJIRA", "--quiet", "--succeed-always", test_file])
+
+        assert exc_info.value.code == 0  # Should succeed due to --succeed-always
+        captured = capsys.readouterr()
+
+        # Should show configuration warning to stderr
+        assert "Warning: Using --quiet with --succeed-always" in captured.err
+        assert "may reduce visibility of TODO violations" in captured.err
+
+        # Should still show violations in quiet format to stdout
+        assert (
+            "test_file_with_violations.py:3: # TODO: This is a violation"
+            in captured.out
+        )
+
+    def test_succeed_always_with_clean_file(self, capsys):
+        """Test --succeed-always with clean file (no violations)."""
+        test_file = str(self.test_data_dir / "test_file_clean.py")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-j", "MYJIRA", "--succeed-always", test_file])
+
+        assert exc_info.value.code == 0  # Should succeed
+        captured = capsys.readouterr()
+        assert "✅ All work comments have proper Jira references" in captured.out
+
+    def test_help_includes_succeed_always(self, capsys):
+        """Test that --help includes information about --succeed-always."""
+        parser = create_parser()
+
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["--help"])
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+
+        # Check for succeed-always option in help text
+        assert "--succeed-always" in captured.out
+        assert "Always exit with code 0" in captured.out
