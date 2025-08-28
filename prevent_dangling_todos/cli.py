@@ -85,6 +85,15 @@ def create_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--succeed-always",
+        action="store_true",
+        help=(
+            "Always exit with code 0, even when dangling TODOs are found. "
+            "Useful for alerting developers without blocking commits."
+        ),
+    )
+
+    parser.add_argument(
         "--version",
         action="version",
         version="%(prog)s 0.1.0",
@@ -146,6 +155,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     # Determine final values (CLI overrides env vars)
     final_jira_prefixes = cli_jira_prefixes or env_jira_prefixes
     final_comment_prefixes = cli_comment_prefixes or env_comment_prefixes
+    final_succeed_always = args.succeed_always
 
     # Validate that jira_prefixes are provided from some source
     if not final_jira_prefixes:
@@ -166,11 +176,20 @@ def main(argv: Optional[List[str]] = None) -> None:
         )
         sys.exit(2)
 
+    # Configuration warning for conflicting options
+    if args.quiet and final_succeed_always:
+        print(
+            "Warning: Using --quiet with --succeed-always may reduce visibility of TODO violations. "
+            "Consider using only --succeed-always if you want to see violation details.",
+            file=sys.stderr,
+        )
+
     # Initialize checker with configuration
     checker = TodoChecker(
         jira_prefixes=final_jira_prefixes,
         quiet=args.quiet,
         comment_prefixes=final_comment_prefixes,
+        succeed_always=final_succeed_always,
     )
 
     # Check files and exit with appropriate code
