@@ -118,22 +118,14 @@ class TestTodoChecker:
         self, clean_test_file, violation_test_file, capsys
     ):
         """Test output differences between quiet and standard modes."""
-        # Test 1: Quiet mode with violations
+        # Test 1: Quiet mode with violations - should have no output
         quiet_checker = TodoChecker(jira_prefixes="MYJIRA", quiet=True)
         exit_code = quiet_checker.check_files([violation_test_file])
         assert exit_code == 1
 
         captured = capsys.readouterr()
-        # In quiet mode, should only show violations in simple format
-        assert (
-            "test_file_with_violations.py:3: # TODO: This is a violation"
-            in captured.out
-        )
-        # Should not have decorative elements
-        assert "🔍" not in captured.out
-        assert "❌" not in captured.out
-        assert "💡" not in captured.out
-        assert "✅" not in captured.out
+        # In quiet mode, should have no output at all
+        assert captured.out == ""
 
         # Test 2: Quiet mode with no violations - should output nothing
         quiet_checker.exit_code = 0  # Reset
@@ -143,20 +135,18 @@ class TestTodoChecker:
         captured = capsys.readouterr()
         assert captured.out == ""
 
-        # Test 3: Standard mode with violations
+        # Test 3: Standard mode with violations - only show violations with red X
         standard_checker = TodoChecker(jira_prefixes="MYJIRA", quiet=False)
         exit_code = standard_checker.check_files([violation_test_file])
         assert exit_code == 1
 
         captured = capsys.readouterr()
-        # Standard mode should have decorative elements and helpful tips
-        assert (
-            "🔍 Checking work comments for Jira references to projects" in captured.out
-        )
+        # Standard mode should only show violations with red X
         assert "❌" in captured.out
-        assert (
-            "💡 Please add Jira issue references to work comments like:" in captured.out
-        )
+        assert "TODO: This is a violation" in captured.out
+        # Should not show config info or help text in standard mode
+        assert "🔍 Checking work comments for Jira references to projects" not in captured.out
+        assert "💡 Please add Jira issue references to work comments like:" not in captured.out
 
     def test_multiple_jira_prefixes(self, test_data_dir, capsys):
         """Test comprehensive multiple JIRA prefix functionality."""
@@ -200,16 +190,18 @@ class TestTodoChecker:
             "FIXME: Another violation" in content for content in violation_contents
         )
 
-        # Test 4: Error message display with multiple prefixes
+        # Test 4: Standard mode output with violations
         test_file = str(test_data_dir / "test_file_with_violations.py")
         exit_code = multi_checker.check_files([test_file])
 
         assert exit_code == 1
         captured = capsys.readouterr()
 
-        # Should show multiple prefixes in error message format
-        assert "ALPHA-XXXX|BETA-XXXX|GAMMA-XXXX" in captured.out
+        # Standard mode should only show violations with red X
+        assert "❌" in captured.out
         assert "TODO: This is a violation" in captured.out
+        # Should not show config info or help text in standard mode
+        assert "ALPHA-XXXX|BETA-XXXX|GAMMA-XXXX" not in captured.out
 
     def test_succeed_always_initialization(self):
         """Test TodoChecker initialization with succeed_always parameter."""
@@ -249,9 +241,9 @@ class TestTodoChecker:
         assert checker_succeed.exit_code == 1  # Internal state should still track violations
 
         captured = capsys.readouterr()
-        # Should still show violations in output
+        # Should still show violations in output (standard mode)
         assert "❌" in captured.out
-        assert "Work comment missing Jira reference" in captured.out
+        assert "TODO: This is a violation" in captured.out
 
         # Test 3: Clean file with succeed_always - should return 0
         clean_file = str(test_data_dir / "test_file_clean.py")
@@ -274,15 +266,8 @@ class TestTodoChecker:
         assert exit_code == 0  # Should return 0 due to succeed_always
         captured = capsys.readouterr()
         
-        # Should show violations in quiet format
-        assert (
-            "test_file_with_violations.py:3: # TODO: This is a violation"
-            in captured.out
-        )
-        # Should not have decorative elements (quiet mode)
-        assert "🔍" not in captured.out
-        assert "❌" not in captured.out
-        assert "💡" not in captured.out
+        # Quiet mode should have no output at all
+        assert captured.out == ""
 
     def test_succeed_always_preserves_logging_behavior(self, test_data_dir, capsys):
         """Test that succeed_always doesn't change violation detection or logging."""

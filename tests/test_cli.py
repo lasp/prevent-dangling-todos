@@ -53,7 +53,7 @@ class TestCLI:
         assert "error: the following arguments are required: FILE" in captured.err
 
     def test_clean_file_passes(self, capsys):
-        """Test that a file with properly referenced TODOs passes."""
+        """Test that a file with properly referenced TODOs passes with no output."""
         test_file = str(self.test_data_dir / "test_file_clean.py")
 
         with pytest.raises(SystemExit) as exc_info:
@@ -61,10 +61,11 @@ class TestCLI:
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert "✅ All work comments have proper Jira references" in captured.out
+        # Standard mode should have no output for clean files
+        assert captured.out == ""
 
     def test_file_with_violations_fails(self, capsys):
-        """Test that a file with violations fails with exit code 1."""
+        """Test that a file with violations fails with exit code 1 and shows violations with red X."""
         test_file = str(self.test_data_dir / "test_file_with_violations.py")
 
         with pytest.raises(SystemExit) as exc_info:
@@ -73,16 +74,18 @@ class TestCLI:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
 
-        # Check for violations in output
+        # Standard mode should show violations with red X marks
         assert "❌" in captured.out
-        assert "Work comment missing Jira reference" in captured.out
         assert "TODO: This is a violation" in captured.out
         assert "FIXME: Another violation" in captured.out
-        assert "💡 Please add Jira issue references" in captured.out
+        
+        # Should not show config info or help text in standard mode
+        assert "🔍 Checking work comments" not in captured.out
+        assert "💡 Please add Jira issue references" not in captured.out
 
     def test_multiple_jira_prefixes(self, capsys):
         """Test multiple JIRA prefixes in both success and failure cases."""
-        # Test 1: Multiple prefixes with all valid references - should pass
+        # Test 1: Multiple prefixes with all valid references - should pass with no output
         test_file = str(
             self.test_data_dir / "test_file_clean.py"
         )  # All have MYJIRA prefix
@@ -92,10 +95,10 @@ class TestCLI:
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert "✅ All work comments have proper Jira references" in captured.out
-        assert "projects MYJIRA, PROJECT, TEAM" in captured.out
+        # Standard mode should have no output for clean files
+        assert captured.out == ""
 
-        # Test 2: Single prefix with violations - should fail and show prefix in error
+        # Test 2: Multiple prefixes with violations - should only show violations
         test_file = str(self.test_data_dir / "test_file_with_violations.py")
 
         with pytest.raises(SystemExit) as exc_info:
@@ -104,11 +107,12 @@ class TestCLI:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
 
-        # Should show all prefixes in error message format
-        assert "MYJIRA-XXXX|PROJECT-XXXX|TEAM-XXXX" in captured.out
-        # Should find violation examples
+        # Should show violations with red X marks
+        assert "❌" in captured.out
         assert "TODO: This is a violation" in captured.out
-        assert "(Also valid: PROJECT, TEAM)" in captured.out
+        # Should not show config info or help text in standard mode
+        assert "projects MYJIRA, PROJECT, TEAM" not in captured.out
+        assert "(Also valid: PROJECT, TEAM)" not in captured.out
 
     def test_comment_prefixes_filter(self, capsys):
         """Test filtering specific comment prefixes."""
@@ -121,14 +125,16 @@ class TestCLI:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
 
-        # Should find TODO violation but not FIXME violations
+        # Should find TODO violation but not show config info in standard mode
         assert "TODO: This TODO has no reference" in captured.out
-        assert "Checking for: TODO" in captured.out
+        assert "❌" in captured.out
+        # Should not show config info in standard mode
+        assert "Checking for: TODO" not in captured.out
         # Should not show FIXME violations since we're only checking TODO
         assert "FIXME: Missing reference FIXME" not in captured.out
 
     def test_quiet_mode(self, capsys):
-        """Test quiet mode only outputs violation lines."""
+        """Test quiet mode produces no output at all."""
         test_file = str(self.test_data_dir / "test_file_with_violations.py")
 
         with pytest.raises(SystemExit) as exc_info:
@@ -138,12 +144,8 @@ class TestCLI:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
 
-        # Quiet mode should only show violations in simple format
-        assert (
-            "test_file_with_violations.py:3: # TODO: This is a violation"
-            in captured.out
-        )
-        # Should not have decorative elements
+        # Quiet mode should have no output at all
+        assert captured.out == ""
         assert "🔍" not in captured.out
         assert "❌" not in captured.out
         assert "💡" not in captured.out
@@ -161,15 +163,17 @@ class TestCLI:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
 
-        # Should report violations for the file with issues
+        # Should show violations from the problematic file
         assert "test_file_with_violations.py" in captured.out
-        assert "Work comment missing Jira reference" in captured.out
+        assert "❌" in captured.out
+        # Should not show config info in standard mode
+        assert "Work comment missing Jira reference" not in captured.out
 
     def test_environment_variables(self, capsys, monkeypatch):
         """Test comprehensive environment variable support and parsing."""
         test_file = str(self.test_data_dir / "test_file_clean.py")
 
-        # Test 1: JIRA_PREFIX environment variable with multiple values
+        # Test 1: JIRA_PREFIX environment variable with multiple values - clean file should have no output
         monkeypatch.setenv("JIRA_PREFIX", "MYJIRA,PROJECT")
 
         with pytest.raises(SystemExit) as exc_info:
@@ -177,9 +181,10 @@ class TestCLI:
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert "projects MYJIRA, PROJECT" in captured.out
+        # Standard mode should have no output for clean files
+        assert captured.out == ""
 
-        # Test 2: Both JIRA_PREFIX and COMMENT_PREFIX environment variables
+        # Test 2: Both JIRA_PREFIX and COMMENT_PREFIX environment variables with violations
         test_file = str(self.test_data_dir / "test_file_single_todo.py")
         monkeypatch.setenv("JIRA_PREFIX", "MYJIRA")
         monkeypatch.setenv("COMMENT_PREFIX", "TODO,XXX")
@@ -189,9 +194,12 @@ class TestCLI:
 
         assert exc_info.value.code == 1  # Should find TODO violations
         captured = capsys.readouterr()
-        assert "Checking for: TODO, XXX" in captured.out
+        # Standard mode should show violations but not config info
+        assert "❌" in captured.out
+        assert "TODO: This TODO has no reference" in captured.out
+        assert "Checking for: TODO, XXX" not in captured.out
 
-        # Test 3: CLI arguments override environment variables
+        # Test 3: CLI arguments override environment variables - clean file should have no output
         test_file = str(self.test_data_dir / "test_file_clean.py")
         monkeypatch.setenv("JIRA_PREFIX", "WRONGPREFIX")
         monkeypatch.setenv("COMMENT_PREFIX", "WRONGCOMMENT")
@@ -201,18 +209,17 @@ class TestCLI:
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        # Should use CLI values, not env vars
-        assert "projects MYJIRA" in captured.out
-        assert "Checking for: TODO" in captured.out
+        # Standard mode should have no output for clean files
+        assert captured.out == ""
 
-        # Test 4: Comma parsing with whitespace and empty values
+        # Test 4: Comma parsing with whitespace and empty values - clean file should have no output
         with pytest.raises(SystemExit) as exc_info:
             main(["-j", " MYJIRA,,PROJECT, ", test_file])
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        # Should handle whitespace and filter empty values
-        assert "projects MYJIRA, PROJECT" in captured.out
+        # Standard mode should have no output for clean files
+        assert captured.out == ""
 
     def test_no_jira_prefix_error(self, capsys):
         """Test error when no Jira prefix provided via CLI or env var."""
@@ -237,11 +244,12 @@ class TestCLI:
         assert exc_info.value.code == 0  # Should exit with 0 despite violations
         captured = capsys.readouterr()
 
-        # Should still show violations (same output behavior)
+        # Should still show violations in standard mode (violations only with red X)
         assert "❌" in captured.out
-        assert "Work comment missing Jira reference" in captured.out
         assert "TODO: This is a violation" in captured.out
-        assert "💡 Please add Jira issue references" in captured.out
+        # Should not show config info or help text in standard mode
+        assert "Work comment missing Jira reference" not in captured.out
+        assert "💡 Please add Jira issue references" not in captured.out
 
 
 
@@ -259,11 +267,8 @@ class TestCLI:
         assert "Warning: Using --quiet with --succeed-always" in captured.err
         assert "may reduce visibility of TODO violations" in captured.err
 
-        # Should still show violations in quiet format to stdout
-        assert (
-            "test_file_with_violations.py:3: # TODO: This is a violation"
-            in captured.out
-        )
+        # Should have no output to stdout in quiet mode
+        assert captured.out == ""
 
     def test_succeed_always_with_clean_file(self, capsys):
         """Test --succeed-always with clean file (no violations)."""
@@ -274,7 +279,8 @@ class TestCLI:
 
         assert exc_info.value.code == 0  # Should succeed
         captured = capsys.readouterr()
-        assert "✅ All work comments have proper Jira references" in captured.out
+        # Standard mode should have no output for clean files
+        assert captured.out == ""
 
     def test_help_includes_succeed_always(self, capsys):
         """Test that --help includes information about --succeed-always."""
@@ -289,3 +295,98 @@ class TestCLI:
         # Check for succeed-always option in help text
         assert "--succeed-always" in captured.out
         assert "Always exit with code 0" in captured.out
+
+    def test_verbose_mode_with_violations(self, capsys):
+        """Test verbose mode shows config, violations, file status, and help text."""
+        test_file = str(self.test_data_dir / "test_file_with_violations.py")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-j", "MYJIRA", "--verbose", test_file])
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+
+        # Should show config info
+        assert "🔍 Checking work comments for Jira references to projects MYJIRA" in captured.out
+        assert "Checking for:" in captured.out
+        
+        # Should show violations with red X
+        assert "❌" in captured.out
+        assert "TODO: This is a violation" in captured.out
+        
+        # Should show file status summary
+        assert f"❌ {test_file}" in captured.out
+        
+        # Should show help text
+        assert "💡 Please add Jira issue references to work comments like:" in captured.out
+
+    def test_verbose_mode_with_clean_file(self, capsys):
+        """Test verbose mode with clean file shows config and file status but no violations."""
+        test_file = str(self.test_data_dir / "test_file_clean.py")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-j", "MYJIRA", "--verbose", test_file])
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+
+        # Should show config info
+        assert "🔍 Checking work comments for Jira references to projects MYJIRA" in captured.out
+        assert "Checking for:" in captured.out
+        
+        # Should show file status with checkmark
+        assert f"✅ {test_file}" in captured.out
+        
+        # Should not show violations or help text
+        assert "❌" not in captured.out
+        assert "💡 Please add Jira issue references" not in captured.out
+
+    def test_verbose_mode_multiple_files(self, capsys):
+        """Test verbose mode with multiple files shows status for each."""
+        clean_file = str(self.test_data_dir / "test_file_clean.py")
+        violation_file = str(self.test_data_dir / "test_file_with_violations.py")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-j", "MYJIRA", "--verbose", clean_file, violation_file])
+
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+
+        # Should show config info
+        assert "🔍 Checking work comments for Jira references to projects MYJIRA" in captured.out
+        
+        # Should show violations
+        assert "❌" in captured.out
+        assert "TODO: This is a violation" in captured.out
+        
+        # Should show status for both files
+        assert f"✅ {clean_file}" in captured.out
+        assert f"❌ {violation_file}" in captured.out
+        
+        # Should show help text since there were violations
+        assert "💡 Please add Jira issue references" in captured.out
+
+    def test_verbose_quiet_mutually_exclusive(self, capsys):
+        """Test that --verbose and --quiet are mutually exclusive."""
+        test_file = str(self.test_data_dir / "test_file_clean.py")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-j", "MYJIRA", "--verbose", "--quiet", test_file])
+
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "Error: --quiet and --verbose are mutually exclusive" in captured.err
+
+    def test_help_includes_verbose(self, capsys):
+        """Test that --help includes information about --verbose."""
+        parser = create_parser()
+
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["--help"])
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+
+        # Check for verbose option in help text
+        assert "--verbose" in captured.out
+        assert "Verbose mode" in captured.out

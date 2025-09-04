@@ -25,7 +25,9 @@ class TodoChecker:
     comment_prefixes : list of str
         List of comment prefixes to check (e.g., TODO, FIXME)
     quiet : bool
-        Whether to suppress decorative output
+        Whether to suppress all output (silent mode)
+    verbose : bool
+        Whether to show detailed output including config, violations, file status, and help
     succeed_always : bool
         Whether to always exit with code 0 even when violations are found
     exit_code : int
@@ -41,6 +43,7 @@ class TodoChecker:
         jira_prefixes: Union[str, List[str]],
         comment_prefixes: Optional[List[str]] = None,
         quiet: bool = False,
+        verbose: bool = False,
         succeed_always: bool = False,
     ):
         """
@@ -53,7 +56,9 @@ class TodoChecker:
         comment_prefixes : list of str, optional
             Comment prefixes to check (e.g., ["TODO", "FIXME"]). If None, uses default list.
         quiet : bool, optional
-            If True, only output violations without decorative text or tips. Default is False.
+            If True, suppress all output and only return exit codes. Default is False.
+        verbose : bool, optional
+            If True, show detailed output including config, violations, file status, and help. Default is False.
         succeed_always : bool, optional
             If True, always exit with code 0 even when violations are found. Default is False.
         """
@@ -64,6 +69,7 @@ class TodoChecker:
             self.jira_prefixes = jira_prefixes
 
         self.quiet = quiet
+        self.verbose = verbose
         self.succeed_always = succeed_always
         self.exit_code = 0
 
@@ -153,36 +159,43 @@ class TodoChecker:
         int
             Exit code (0 if no violations, 1 if violations found)
         """
-        if not self.quiet:
-            print(
-                f"🔍 Checking work comments for Jira references to projects {', '.join(self.jira_prefixes)}..."
-            )
-            print(f"   Checking for: {', '.join(self.comment_prefixes)}")
+        # Collect all violations and file statuses for verbose mode
+        all_violations = []
+        file_statuses = []
 
+        # Verbose mode: Show configuration at the beginning
+        if self.verbose:
+            print(
+                f"🔍 Checking work comments for Jira references to projects {', '.join(self.jira_prefixes)}... "
+                f"Checking for: {', '.join(self.comment_prefixes)}"
+            )
+
+        # Check each file
         for file_path in file_paths:
             violations = self.check_file(file_path)
-
+            
             if violations:
-                if self.quiet:
-                    # In quiet mode, just output the violations
-                    for line_num, line_content in violations:
-                        print(f"{file_path}:{line_num}: {line_content}")
-                else:
-                    # Show all allowed prefixes consistently
-                    prefixes_display = "|".join(
-                        f"{prefix}-XXXX" for prefix in self.jira_prefixes
-                    )
-                    print(
-                        f"❌ {file_path} - Work comment missing Jira reference ({prefixes_display}):"
-                    )
-                    for line_num, line_content in violations:
-                        print(f"   {line_num}: {line_content}")
+                all_violations.append((file_path, violations))
+                file_statuses.append((file_path, False))  # False = has violations
                 self.exit_code = 1
-
-        if not self.quiet:
-            if self.exit_code == 0:
-                print("✅ All work comments have proper Jira references")
             else:
+                file_statuses.append((file_path, True))   # True = clean
+
+        # Output violations based on mode
+        for file_path, violations in all_violations:
+            if not self.quiet:  # Both standard and verbose modes show violations
+                for line_num, line_content in violations:
+                    print(f"❌ {file_path}:{line_num}: {line_content}")
+
+        # Verbose mode: Show file status summary and help text
+        if self.verbose:
+            print("")  # Blank line before summary
+            for file_path, is_clean in file_statuses:
+                status_icon = "✅" if is_clean else "❌"
+                print(f"{status_icon} {file_path}")
+            
+            # Show help text only if violations were found
+            if self.exit_code == 1:
                 print("")
                 print("💡 Please add Jira issue references to work comments like:")
                 # Use first prefix for examples, but mention all are valid
