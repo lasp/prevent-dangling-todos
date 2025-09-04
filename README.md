@@ -42,16 +42,35 @@ repos:
         args: ['-j', 'MYJIRA', '-c', 'TODO,FIXME']
 ```
 
-### Quiet Mode for CI
+### Output Modes
 
-Suppress decorative output in CI environments:
+The tool supports three output modes:
 
+**Standard Mode (default)**: Shows only violations with red X marks, no success messages
+```yaml
+repos:
+  - repo: https://github.com/lasp/prevent-dangling-todos
+    hooks:
+      - id: prevent-dangling-todos
+        args: ['-j', 'MYJIRA']
+```
+
+**Quiet Mode**: Completely silent - no output, only exit codes
 ```yaml
 repos:
   - repo: https://github.com/lasp/prevent-dangling-todos
     hooks:
       - id: prevent-dangling-todos
         args: ['-j', 'MYJIRA', '-q']
+```
+
+**Verbose Mode**: Shows configuration, violations, file status summary, and help text
+```yaml
+repos:
+  - repo: https://github.com/lasp/prevent-dangling-todos
+    hooks:
+      - id: prevent-dangling-todos
+        args: ['-j', 'MYJIRA', '-v']
 ```
 
 ### Alert Without Blocking
@@ -94,9 +113,12 @@ Then run with: `pre-commit run --verbose` or `git commit` (if you want to see vi
 
 - `-j, --jira-prefix PREFIXES`: Jira project prefixes (comma-separated)
 - `-c, --comment-prefix PREFIXES`: Comment types to check (comma-separated)
-- `-q, --quiet`: Suppress decorative output
+- `-q, --quiet`: Silent mode - no output, just exit codes
+- `-v, --verbose`: Verbose mode - show configuration, violations, file status, and help text
 - `--succeed-always`: Always exit with code 0, even when TODOs are found
 - `--version`: Show version information
+
+**Note**: `--quiet` and `--verbose` are mutually exclusive options.
 
 ### File Exclusions
 
@@ -139,6 +161,31 @@ TODO, FIXME, XXX, HACK, BUG, REVIEW, OPTIMIZE, REFACTOR
 # FIXME: Another comment without ticket
 ```
 
+### Output Examples
+
+**Standard Mode** (violations only):
+```
+❌ file.py:15: # TODO: Missing Jira reference
+❌ file.py:23: # FIXME: Another comment without ticket
+```
+
+**Quiet Mode**: No output (silent)
+
+**Verbose Mode**:
+```
+🔍 Checking work comments for Jira references to projects MYJIRA... Checking for: TODO, FIXME, XXX, HACK, BUG, REVIEW, OPTIMIZE, REFACTOR
+
+❌ file.py:15: # TODO: Missing Jira reference
+❌ file.py:23: # FIXME: Another comment without ticket
+
+✅ clean_file.py
+❌ file.py
+
+💡 Please add Jira issue references to work comments like:
+   // TODO MYJIRA-123: Implement user authentication
+   # FIXME MYJIRA-124: Handle edge case for empty input
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -157,7 +204,8 @@ TODO, FIXME, XXX, HACK, BUG, REVIEW, OPTIMIZE, REFACTOR
 
 4. **False positives**
    - Use `-c/--comment-prefix` to check only specific comment types
-   - Consider using `-q/--quiet` mode in automated environments
+   - Consider using `-q/--quiet` mode for silent operation in CI/CD pipelines
+   - Use `-v/--verbose` mode when you need detailed information about what files are being checked
 
 ### Getting Help
 

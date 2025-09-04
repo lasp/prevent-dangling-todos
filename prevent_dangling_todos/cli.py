@@ -81,7 +81,14 @@ def create_parser() -> argparse.ArgumentParser:
         "-q",
         "--quiet",
         action="store_true",
-        help="Only output violation lines without decorative text or tips",
+        help="Silent mode: no output, just exit codes",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Verbose mode: show configuration, violations, file status summary, and help text",
     )
 
     parser.add_argument(
@@ -176,7 +183,14 @@ def main(argv: Optional[List[str]] = None) -> None:
         )
         sys.exit(2)
 
-    # Configuration warning for conflicting options
+    # Configuration validation for conflicting options
+    if args.quiet and args.verbose:
+        print(
+            "Error: --quiet and --verbose are mutually exclusive options.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     if args.quiet and final_succeed_always:
         print(
             "Warning: Using --quiet with --succeed-always may reduce visibility of TODO violations. "
@@ -188,6 +202,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     checker = TodoChecker(
         jira_prefixes=final_jira_prefixes,
         quiet=args.quiet,
+        verbose=args.verbose,
         comment_prefixes=final_comment_prefixes,
         succeed_always=final_succeed_always,
     )
@@ -195,3 +210,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     # Check files and exit with appropriate code
     exit_code = checker.check_files(args.files)
     sys.exit(exit_code)
+
+
+if __name__ == "__main__":
+    main()
