@@ -104,13 +104,13 @@ class TodoChecker:
         """
         # Pattern to find work comments
         prefixes_pattern = "|".join(self.comment_prefixes)
-        self.comment_pattern = re.compile(rf"\b({prefixes_pattern})\b", re.IGNORECASE)
+        self.comment_pattern = re.compile(rf"\b({prefixes_pattern})\b")
 
         # Pattern to find Jira references - match any of the allowed prefixes
         jira_prefixes_pattern = "|".join(
             re.escape(prefix) for prefix in self.jira_prefixes
         )
-        self.jira_pattern = re.compile(rf"({jira_prefixes_pattern})-\d+", re.IGNORECASE)
+        self.jira_pattern = re.compile(rf"({jira_prefixes_pattern})-\d+")
 
     def check_file(self, file_path: str) -> List[Tuple[int, str]]:
         """

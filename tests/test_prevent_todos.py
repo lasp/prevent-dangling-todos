@@ -28,15 +28,15 @@ class TestTodoChecker:
         assert checker.comment_pattern.search("FIXME: test")
         assert checker.comment_pattern.search("XXX: test")
 
-        # Test case insensitive comment matching
-        assert checker.comment_pattern.search("todo: lowercase")
+        # Test case sensitive comment matching
+        assert not checker.comment_pattern.search("todo: lowercase")
         assert checker.comment_pattern.search("TODO: uppercase")
-        assert checker.comment_pattern.search("ToDo: mixed case")
+        assert not checker.comment_pattern.search("ToDo: mixed case")
 
-        # Test JIRA pattern matching with case insensitivity
+        # Test JIRA pattern matching with case sensitivity
         assert checker.jira_pattern.search("MYJIRA-123")
-        assert checker.jira_pattern.search("myjira-456")
-        assert checker.jira_pattern.search("MyJira-789")
+        assert not checker.jira_pattern.search("myjira-456")
+        assert not checker.jira_pattern.search("MyJira-789")
 
         # Test pattern specificity - should not match other prefixes
         assert not checker.jira_pattern.search("PROJECT-123")
@@ -45,7 +45,7 @@ class TestTodoChecker:
         # Test with custom checker for different prefix
         custom_checker = TodoChecker(jira_prefixes="PROJECT")
         assert custom_checker.jira_pattern.search("PROJECT-123")
-        assert custom_checker.jira_pattern.search("project-456")
+        assert not custom_checker.jira_pattern.search("project-456")
         assert not custom_checker.jira_pattern.search("MYJIRA-123")
 
     def test_file_checking(self, checker, clean_test_file, violation_test_file):
@@ -161,11 +161,11 @@ class TestTodoChecker:
         # Test 2: Pattern matching with multiple prefixes
         multi_checker = TodoChecker(jira_prefixes=["ALPHA", "BETA", "GAMMA"])
 
-        # Should match any of the prefixes
+        # Should match any of the prefixes (case sensitive)
         assert multi_checker.jira_pattern.search("ALPHA-123")
         assert multi_checker.jira_pattern.search("BETA-456")
         assert multi_checker.jira_pattern.search("GAMMA-789")
-        assert multi_checker.jira_pattern.search("alpha-123")  # Case insensitive
+        assert not multi_checker.jira_pattern.search("alpha-123")  # Case sensitive
 
         # Should not match other prefixes
         assert not multi_checker.jira_pattern.search("DELTA-123")
