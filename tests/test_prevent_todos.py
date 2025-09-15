@@ -1,5 +1,6 @@
 """Unit tests for the prevent_todos module."""
 
+from pathlib import Path
 import pytest
 
 from prevent_dangling_todos.prevent_todos import TodoChecker
@@ -292,3 +293,166 @@ class TestTodoChecker:
 
         # Both should have detected the same violations internally
         assert checker_normal.exit_code == checker_succeed.exit_code == 1
+
+
+class TestTicketTodoTracking:
+    """Test tracking of TODOs for the current branch ticket."""
+
+    @pytest.fixture
+    def test_data_dir(self):
+        """Get test data directory."""
+        return Path(__file__).parent / "test_data"
+
+    def test_current_ticket_id_initialization(self):
+        """Test TodoChecker initialization with current_ticket_id."""
+        # Test without current_ticket_id
+        checker = TodoChecker(jira_prefixes="MYJIRA")
+        assert checker.current_ticket_id is None
+        assert checker.ticket_todos == []
+
+        # Test with current_ticket_id
+        checker = TodoChecker(jira_prefixes="MYJIRA", current_ticket_id="MYJIRA-123")
+        assert checker.current_ticket_id == "MYJIRA-123"
+        assert checker.ticket_todos == []
+
+    def test_ticket_todo_tracking(self, test_data_dir):
+        """Test that TODOs matching current ticket are tracked separately."""
+        # Create checker with current ticket ID that exists in the file
+        checker = TodoChecker(
+            jira_prefixes="MYJIRA", current_ticket_id="MYJIRA-100"
+        )
+
+        # Check a file that has TODOs with MYJIRA-100
+        test_file = str(test_data_dir / "test_file_clean.py")
+        violations = checker.check_file(test_file)
+
+        # Should have no violations (all TODOs have references)
+        assert len(violations) == 0
+
+        # Should have tracked the MYJIRA-100 TODOs
+        assert len(checker.ticket_todos) == 1
+        assert any("MYJIRA-100" in todo[2] for todo in checker.ticket_todos)
+
+    def test_ticket_todo_output(self, test_data_dir, capsys):
+        """Test yellow warning output for ticket-specific TODOs."""
+        # Create checker with current ticket ID
+        checker = TodoChecker(
+            jira_prefixes="MYJIRA",
+            current_ticket_id="MYJIRA-100",
+            quiet=False,
+        )
+
+        test_file = str(test_data_dir / "test_file_clean.py")
+        exit_code = checker.check_files([test_file])
+
+        assert exit_code == 0  # No violations
+        captured = capsys.readouterr()
+
+        # Should show yellow warning for ticket TODOs
+        assert "⚠️  Unresolved TODOs for current branch ticket MYJIRA-100:" in captured.out
+        assert "⚠️" in captured.out
+        assert "MYJIRA-100" in captured.out
+
+    def test_no_ticket_todos_no_output(self, test_data_dir, capsys):
+        """Test no output when there are no TODOs for current ticket."""
+        # Create checker with a ticket ID that doesn't appear in the file
+        checker = TodoChecker(
+            jira_prefixes="MYJIRA",
+            current_ticket_id="MYJIRA-999",
+            quiet=False,
+        )
+
+        test_file = str(test_data_dir / "test_file_clean.py")
+        exit_code = checker.check_files([test_file])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+
+        # Should not show ticket TODO section if none found
+        assert "⚠️  Unresolved TODOs for current branch ticket" not in captured.out
+
+    def test_ticket_todos_quiet_mode(self, test_data_dir, capsys):
+        """Test that ticket TODOs are suppressed in quiet mode."""
+        checker = TodoChecker(
+            jira_prefixes="MYJIRA",
+            current_ticket_id="MYJIRA-100",
+            quiet=True,
+        )
+
+        test_file = str(test_data_dir / "test_file_clean.py")
+        exit_code = checker.check_files([test_file])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+
+        # Quiet mode should suppress all output
+        assert captured.out == ""
+
+    def test_ticket_todos_with_violations(self, test_data_dir, capsys):
+        """Test ticket TODOs shown along with violations."""
+        # Create a test file with both violations and ticket TODOs
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+            f.write("# TODO: This has no reference\n")
+            f.write("# TODO MYJIRA-123: This is for the current ticket\n")
+            f.write("# FIXME: Another violation\n")
+            f.write("# TODO MYJIRA-456: This is for a different ticket\n")
+            temp_file = f.name
+
+        try:
+            checker = TodoChecker(
+                jira_prefixes="MYJIRA",
+                current_ticket_id="MYJIRA-123",
+            )
+
+            exit_code = checker.check_files([temp_file])
+            assert exit_code == 1  # Has violations
+
+            captured = capsys.readouterr()
+
+            # Should show violations with red X
+            assert "❌" in captured.out
+            assert "TODO: This has no reference" in captured.out
+            assert "FIXME: Another violation" in captured.out
+
+            # Should also show ticket TODOs with yellow warning
+            assert "⚠️  Unresolved TODOs for current branch ticket MYJIRA-123:" in captured.out
+            assert "TODO MYJIRA-123: This is for the current ticket" in captured.out
+
+            # Should not show TODOs for other tickets in the yellow section
+            assert "TODO MYJIRA-456" not in captured.out.split("⚠️  Unresolved TODOs")[1] if "⚠️  Unresolved TODOs" in captured.out else True
+
+        finally:
+            import os
+            os.unlink(temp_file)
+
+    def test_ticket_todos_do_not_affect_exit_code(self, test_data_dir):
+        """Test that ticket TODOs don't cause exit code failures."""
+        checker = TodoChecker(
+            jira_prefixes="MYJIRA",
+            current_ticket_id="MYJIRA-100",
+        )
+
+        test_file = str(test_data_dir / "test_file_clean.py")
+        exit_code = checker.check_files([test_file])
+
+        # Should succeed even though there are TODOs for the current ticket
+        assert exit_code == 0
+        assert len(checker.ticket_todos) > 0  # Should have found ticket TODOs
+
+    def test_without_current_ticket_id(self, test_data_dir, capsys):
+        """Test behavior when no current_ticket_id is provided."""
+        checker = TodoChecker(
+            jira_prefixes="MYJIRA",
+            current_ticket_id=None,  # No current ticket
+        )
+
+        test_file = str(test_data_dir / "test_file_clean.py")
+        exit_code = checker.check_files([test_file])
+
+        assert exit_code == 0
+        captured = capsys.readouterr()
+
+        # Should not track or show any ticket TODOs
+        assert len(checker.ticket_todos) == 0
+        assert "⚠️  Unresolved TODOs for current branch ticket" not in captured.out

@@ -1,9 +1,15 @@
 """Unit tests for the CLI module."""
 
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 import pytest
 
-from prevent_dangling_todos.cli import main, create_parser
+from prevent_dangling_todos.cli import (
+    main,
+    create_parser,
+    _get_current_git_branch,
+    _extract_ticket_id,
+)
 
 
 class TestCLI:
@@ -56,13 +62,19 @@ class TestCLI:
         """Test that a file with properly referenced TODOs passes with no output."""
         test_file = str(self.test_data_dir / "test_file_clean.py")
 
-        with pytest.raises(SystemExit) as exc_info:
-            main(["-j", "MYJIRA", test_file])
+        # Mock git to avoid branch detection output
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 1  # Simulate git not available
+            mock_run.return_value = mock_result
 
-        assert exc_info.value.code == 0
-        captured = capsys.readouterr()
-        # Standard mode should have no output for clean files
-        assert captured.out == ""
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", test_file])
+
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Should show git detection failure note
+            assert "Note: Unable to detect current git branch" in captured.out
 
     def test_file_with_violations_fails(self, capsys):
         """Test that a file with violations fails with exit code 1 and shows violations with red X."""
@@ -90,13 +102,19 @@ class TestCLI:
             self.test_data_dir / "test_file_clean.py"
         )  # All have MYJIRA prefix
 
-        with pytest.raises(SystemExit) as exc_info:
-            main(["-j", "MYJIRA,PROJECT,TEAM", test_file])
+        # Mock git to avoid branch detection output
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 1  # Simulate git not available
+            mock_run.return_value = mock_result
 
-        assert exc_info.value.code == 0
-        captured = capsys.readouterr()
-        # Standard mode should have no output for clean files
-        assert captured.out == ""
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA,PROJECT,TEAM", test_file])
+
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Should show git detection failure note
+            assert "Note: Unable to detect current git branch" in captured.out
 
         # Test 2: Multiple prefixes with violations - should only show violations
         test_file = str(self.test_data_dir / "test_file_with_violations.py")
@@ -173,53 +191,59 @@ class TestCLI:
         """Test comprehensive environment variable support and parsing."""
         test_file = str(self.test_data_dir / "test_file_clean.py")
 
-        # Test 1: JIRA_PREFIX environment variable with multiple values - clean file should have no output
-        monkeypatch.setenv("JIRA_PREFIX", "MYJIRA,PROJECT")
+        # Mock git to avoid branch detection output
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 1  # Simulate git not available
+            mock_run.return_value = mock_result
 
-        with pytest.raises(SystemExit) as exc_info:
-            main([test_file])
+            # Test 1: JIRA_PREFIX environment variable with multiple values - clean file should have no output
+            monkeypatch.setenv("JIRA_PREFIX", "MYJIRA,PROJECT")
 
-        assert exc_info.value.code == 0
-        captured = capsys.readouterr()
-        # Standard mode should have no output for clean files
-        assert captured.out == ""
+            with pytest.raises(SystemExit) as exc_info:
+                main([test_file])
 
-        # Test 2: Both JIRA_PREFIX and COMMENT_PREFIX environment variables with violations
-        test_file = str(self.test_data_dir / "test_file_single_todo.py")
-        monkeypatch.setenv("JIRA_PREFIX", "MYJIRA")
-        monkeypatch.setenv("COMMENT_PREFIX", "TODO,XXX")
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Should show git detection failure note
+            assert "Note: Unable to detect current git branch" in captured.out
 
-        with pytest.raises(SystemExit) as exc_info:
-            main([test_file])
+            # Test 2: Both JIRA_PREFIX and COMMENT_PREFIX environment variables with violations
+            test_file = str(self.test_data_dir / "test_file_single_todo.py")
+            monkeypatch.setenv("JIRA_PREFIX", "MYJIRA")
+            monkeypatch.setenv("COMMENT_PREFIX", "TODO,XXX")
 
-        assert exc_info.value.code == 1  # Should find TODO violations
-        captured = capsys.readouterr()
-        # Standard mode should show violations but not config info
-        assert "❌" in captured.out
-        assert "TODO: This TODO has no reference" in captured.out
-        assert "Checking for: TODO, XXX" not in captured.out
+            with pytest.raises(SystemExit) as exc_info:
+                main([test_file])
 
-        # Test 3: CLI arguments override environment variables - clean file should have no output
-        test_file = str(self.test_data_dir / "test_file_clean.py")
-        monkeypatch.setenv("JIRA_PREFIX", "WRONGPREFIX")
-        monkeypatch.setenv("COMMENT_PREFIX", "WRONGCOMMENT")
+            assert exc_info.value.code == 1  # Should find TODO violations
+            captured = capsys.readouterr()
+            # Standard mode should show violations but not config info
+            assert "❌" in captured.out
+            assert "TODO: This TODO has no reference" in captured.out
+            assert "Checking for: TODO, XXX" not in captured.out
 
-        with pytest.raises(SystemExit) as exc_info:
-            main(["-j", "MYJIRA", "-c", "TODO", test_file])
+            # Test 3: CLI arguments override environment variables - clean file should have no output
+            test_file = str(self.test_data_dir / "test_file_clean.py")
+            monkeypatch.setenv("JIRA_PREFIX", "WRONGPREFIX")
+            monkeypatch.setenv("COMMENT_PREFIX", "WRONGCOMMENT")
 
-        assert exc_info.value.code == 0
-        captured = capsys.readouterr()
-        # Standard mode should have no output for clean files
-        assert captured.out == ""
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", "-c", "TODO", test_file])
 
-        # Test 4: Comma parsing with whitespace and empty values - clean file should have no output
-        with pytest.raises(SystemExit) as exc_info:
-            main(["-j", " MYJIRA,,PROJECT, ", test_file])
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Should show git detection failure note
+            assert "Note: Unable to detect current git branch" in captured.out
 
-        assert exc_info.value.code == 0
-        captured = capsys.readouterr()
-        # Standard mode should have no output for clean files
-        assert captured.out == ""
+            # Test 4: Comma parsing with whitespace and empty values - clean file should have no output
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", " MYJIRA,,PROJECT, ", test_file])
+
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Should show git detection failure note
+            assert "Note: Unable to detect current git branch" in captured.out
 
     def test_no_jira_prefix_error(self, capsys):
         """Test error when no Jira prefix provided via CLI or env var."""
@@ -274,13 +298,19 @@ class TestCLI:
         """Test --succeed-always with clean file (no violations)."""
         test_file = str(self.test_data_dir / "test_file_clean.py")
 
-        with pytest.raises(SystemExit) as exc_info:
-            main(["-j", "MYJIRA", "--succeed-always", test_file])
+        # Mock git to avoid branch detection output
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 1  # Simulate git not available
+            mock_run.return_value = mock_result
 
-        assert exc_info.value.code == 0  # Should succeed
-        captured = capsys.readouterr()
-        # Standard mode should have no output for clean files
-        assert captured.out == ""
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", "--succeed-always", test_file])
+
+            assert exc_info.value.code == 0  # Should succeed
+            captured = capsys.readouterr()
+            # Should show git detection failure note
+            assert "Note: Unable to detect current git branch" in captured.out
 
     def test_help_includes_succeed_always(self, capsys):
         """Test that --help includes information about --succeed-always."""
@@ -390,3 +420,158 @@ class TestCLI:
         # Check for verbose option in help text
         assert "--verbose" in captured.out
         assert "Verbose mode" in captured.out
+
+
+class TestBranchDetection:
+    """Test git branch detection and ticket ID extraction."""
+
+    def test_get_current_git_branch_success(self):
+        """Test successful git branch detection."""
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = "feature/LIBSDC-123-add-feature\n"
+            mock_run.return_value = mock_result
+
+            branch, error = _get_current_git_branch()
+            assert branch == "feature/LIBSDC-123-add-feature"
+            assert error is None
+
+    def test_get_current_git_branch_failure(self):
+        """Test git branch detection failure."""
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 1
+            mock_result.stdout = ""
+            mock_run.return_value = mock_result
+
+            branch, error = _get_current_git_branch()
+            assert branch is None
+            assert error == "Unable to detect current git branch"
+
+    def test_get_current_git_branch_timeout(self):
+        """Test git branch detection timeout."""
+        import subprocess
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.TimeoutExpired("git", 5)
+
+            branch, error = _get_current_git_branch()
+            assert branch is None
+            assert error == "Unable to detect current git branch"
+
+    def test_extract_ticket_id_various_formats(self):
+        """Test ticket ID extraction from various branch name formats."""
+        # Test typical branch formats
+        assert (
+            _extract_ticket_id("feature/LIBSDC-123-description", ["LIBSDC"])
+            == "LIBSDC-123"
+        )
+        assert (
+            _extract_ticket_id("bugfix/PROJECT-456-fix-bug", ["PROJECT"])
+            == "PROJECT-456"
+        )
+        assert _extract_ticket_id("TEAM-789-simple-branch", ["TEAM"]) == "TEAM-789"
+        assert (
+            _extract_ticket_id("release/v1.0-MYJIRA-100", ["MYJIRA"]) == "MYJIRA-100"
+        )
+
+        # Test multiple prefixes
+        assert (
+            _extract_ticket_id("feature/ALPHA-123-test", ["ALPHA", "BETA", "GAMMA"])
+            == "ALPHA-123"
+        )
+        assert (
+            _extract_ticket_id("feature/BETA-456-test", ["ALPHA", "BETA", "GAMMA"])
+            == "BETA-456"
+        )
+
+        # Test no match
+        assert _extract_ticket_id("main", ["LIBSDC"]) is None
+        assert _extract_ticket_id("develop", ["PROJECT"]) is None
+        assert _extract_ticket_id("feature/add-new-feature", ["MYJIRA"]) is None
+        assert _extract_ticket_id("WRONG-123-branch", ["CORRECT"]) is None
+
+        # Test edge cases
+        assert _extract_ticket_id("", ["LIBSDC"]) is None
+        assert _extract_ticket_id("some-branch", []) is None
+        assert _extract_ticket_id("some-branch", None) is None
+
+    def test_cli_with_branch_detection(self, capsys, monkeypatch):
+        """Test CLI integration with branch detection."""
+        test_data_dir = Path(__file__).parent / "test_data"
+        test_file = str(test_data_dir / "test_file_clean.py")
+
+        # Mock successful branch detection with ticket
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = "feature/MYJIRA-123-test-feature\n"
+            mock_run.return_value = mock_result
+
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", test_file])
+
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Clean file with matching branch should have no output
+            assert captured.out == ""
+
+    def test_cli_no_ticket_in_branch(self, capsys):
+        """Test CLI with branch that has no ticket ID."""
+        test_data_dir = Path(__file__).parent / "test_data"
+        test_file = str(test_data_dir / "test_file_clean.py")
+
+        # Mock branch without ticket
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = "main\n"
+            mock_run.return_value = mock_result
+
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", test_file])
+
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Should show informational message about no ticket
+            assert "Note: No ticket ID detected in current branch 'main'" in captured.out
+
+    def test_cli_git_detection_failure(self, capsys):
+        """Test CLI when git branch detection fails."""
+        test_data_dir = Path(__file__).parent / "test_data"
+        test_file = str(test_data_dir / "test_file_clean.py")
+
+        # Mock git command failure
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 1
+            mock_run.return_value = mock_result
+
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", test_file])
+
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Should show informational message about detection failure
+            assert "Note: Unable to detect current git branch" in captured.out
+
+    def test_cli_quiet_mode_no_branch_message(self, capsys):
+        """Test that branch detection messages are suppressed in quiet mode."""
+        test_data_dir = Path(__file__).parent / "test_data"
+        test_file = str(test_data_dir / "test_file_clean.py")
+
+        # Mock branch without ticket
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = "develop\n"
+            mock_run.return_value = mock_result
+
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", "--quiet", test_file])
+
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Quiet mode should suppress branch detection messages
+            assert captured.out == ""
