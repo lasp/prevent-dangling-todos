@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+
+    - name: Extract tag information
+      id: tag_info
+      run: |
+        TAG_NAME=${GITHUB_REF_NAME}
+        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+        # Check if tag matches semantic version pattern (v?X.Y.Z)
+        if [[ $TAG_NAME =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "is_prerelease=false" >> $GITHUB_OUTPUT
+          echo "Release type: Full release"
+        else
+          echo "is_prerelease=true" >> $GITHUB_OUTPUT
+          echo "Release type: Pre-release"
+        fi
+
+    - name: Install dependencies
+      run: poetry install --no-interaction
+
+    - name: Build package
+      run: poetry build
+
+    - name: Create Release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Create release with automatic release notes generation
+        if [ "${{ steps.tag_info.outputs.is_prerelease }}" = "true" ]; then
+          gh release create ${{ steps.tag_info.outputs.tag_name }} \
+            --title "Release ${{ steps.tag_info.outputs.tag_name }}" \
+            --generate-notes \
+            --prerelease
+        else
+          gh release create ${{ steps.tag_info.outputs.tag_name }} \
+            --title "Release ${{ steps.tag_info.outputs.tag_name }}" \
+            --generate-notes
+        fi
+
+    - name: Upload release artifacts
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Upload all built artifacts to the release
+        gh release upload ${{ steps.tag_info.outputs.tag_name }} dist/*.whl dist/*.tar.gz
