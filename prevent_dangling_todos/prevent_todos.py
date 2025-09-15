@@ -45,6 +45,7 @@ class TodoChecker:
         quiet: bool = False,
         verbose: bool = False,
         succeed_always: bool = False,
+        current_ticket_id: Optional[str] = None,
     ):
         """
         Initialize the TodoChecker.
@@ -61,6 +62,9 @@ class TodoChecker:
             If True, show detailed output including config, violations, file status, and help. Default is False.
         succeed_always : bool, optional
             If True, always exit with code 0 even when violations are found. Default is False.
+        current_ticket_id : str, optional
+            The ticket ID for the current branch (e.g., "LIBSDC-123"). If provided, TODOs
+            matching this ticket will be tracked separately for informational output.
         """
         # Always store as list internally
         if isinstance(jira_prefixes, str):
@@ -72,6 +76,8 @@ class TodoChecker:
         self.verbose = verbose
         self.succeed_always = succeed_always
         self.exit_code = 0
+        self.current_ticket_id = current_ticket_id
+        self.ticket_todos: list[tuple] = []  # Track TODOs for the current ticket
 
         # Comment prefixes that should require Jira references
         if comment_prefixes is None:
@@ -140,6 +146,9 @@ class TodoChecker:
                         # Check if it also contains a Jira reference
                         if not self.jira_pattern.search(line):
                             violations.append((line_num, line.rstrip()))
+                        # If we have a current ticket, check if this TODO is for it
+                        elif self.current_ticket_id and self.current_ticket_id in line:
+                            self.ticket_todos.append((file_path, line_num, line.rstrip()))
         except Exception as e:
             print(f"⚠️  Warning: Could not read {file_path}: {e}", file=sys.stderr)
 
@@ -187,13 +196,20 @@ class TodoChecker:
                 for line_num, line_content in violations:
                     print(f"❌ {file_path}:{line_num}: {line_content}")
 
+        # Show ticket-specific TODOs with yellow warning (not in quiet mode)
+        if self.ticket_todos and not self.quiet:
+            print("")  # Blank line before ticket TODOs
+            print(f"⚠️  Unresolved TODOs for current branch ticket {self.current_ticket_id}:")
+            for file_path, line_num, line_content in self.ticket_todos:
+                print(f"⚠️  {file_path}:{line_num}: {line_content}")
+
         # Verbose mode: Show file status summary and help text
         if self.verbose:
             print("")  # Blank line before summary
             for file_path, is_clean in file_statuses:
                 status_icon = "✅" if is_clean else "❌"
                 print(f"{status_icon} {file_path}")
-            
+
             # Show help text only if violations were found
             if self.exit_code == 1:
                 print("")

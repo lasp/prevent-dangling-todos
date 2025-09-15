@@ -2,8 +2,10 @@
 
 import argparse
 import os
+import re
+import subprocess
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from prevent_dangling_todos.prevent_todos import TodoChecker
 
@@ -134,6 +136,62 @@ def _parse_comma_separated(value: Optional[str]) -> Optional[List[str]]:
     return parsed if parsed else None
 
 
+def _get_current_git_branch() -> Tuple[Optional[str], Optional[str]]:
+    """
+    Get the current git branch name.
+
+    Returns
+    -------
+    tuple of (Optional[str], Optional[str])
+        (branch_name, error_message) - Returns (None, error_msg) if detection fails
+    """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            branch = result.stdout.strip()
+            if branch:
+                return branch, None
+            return None, "Unable to detect current git branch"
+        return None, "Unable to detect current git branch"
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None, "Unable to detect current git branch"
+
+
+def _extract_ticket_id(branch_name: str, jira_prefixes: List[str]) -> Optional[str]:
+    """
+    Extract a ticket ID from a branch name if it matches any of the Jira prefixes.
+
+    Parameters
+    ----------
+    branch_name : str
+        The git branch name
+    jira_prefixes : list of str
+        List of valid Jira project prefixes
+
+    Returns
+    -------
+    str or None
+        The ticket ID (e.g., "LIBSDC-123") if found, otherwise None
+    """
+    if not branch_name or not jira_prefixes:
+        return None
+
+    # Build a pattern to match any of the Jira prefixes followed by a dash and numbers
+    # This will match patterns like LIBSDC-123 anywhere in the branch name
+    for prefix in jira_prefixes:
+        pattern = rf"{re.escape(prefix)}-\d+"
+        match = re.search(pattern, branch_name)
+        if match:
+            return match.group(0)
+
+    return None
+
+
 def main(argv: Optional[List[str]] = None) -> None:
     """
     Main entry point for the script.
@@ -198,6 +256,18 @@ def main(argv: Optional[List[str]] = None) -> None:
             file=sys.stderr,
         )
 
+    # Detect current git branch and extract ticket ID
+    branch_name, branch_error = _get_current_git_branch()
+    current_ticket_id = None
+    branch_detection_msg = None
+
+    if branch_error:
+        branch_detection_msg = f"Note: {branch_error}"
+    elif branch_name:
+        current_ticket_id = _extract_ticket_id(branch_name, final_jira_prefixes)
+        if not current_ticket_id:
+            branch_detection_msg = f"Note: No ticket ID detected in current branch '{branch_name}'"
+
     # Initialize checker with configuration
     checker = TodoChecker(
         jira_prefixes=final_jira_prefixes,
@@ -205,10 +275,16 @@ def main(argv: Optional[List[str]] = None) -> None:
         verbose=args.verbose,
         comment_prefixes=final_comment_prefixes,
         succeed_always=final_succeed_always,
+        current_ticket_id=current_ticket_id,
     )
 
     # Check files and exit with appropriate code
     exit_code = checker.check_files(args.files)
+
+    # Show branch detection message if needed (not in quiet mode)
+    if branch_detection_msg and not args.quiet:
+        print(f"\n{branch_detection_msg}")
+
     sys.exit(exit_code)
 
 

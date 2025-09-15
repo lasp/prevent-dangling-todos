@@ -30,6 +30,34 @@ repos:
         args: ['-j', 'MYJIRA,PROJECT,TEAM']
 ```
 
+### Recommended Configurations
+
+#### For Maximum TODO Visibility (Recommended)
+Get both violations AND branch-specific TODOs, check all files:
+
+```yaml
+repos:
+  - repo: https://github.com/lasp/prevent-dangling-todos
+    hooks:
+      - id: prevent-dangling-todos
+        args: ['-j', 'MYJIRA', '-v']
+        always_run: true  # Check all files for branch-specific TODOs
+        verbose: true     # Always show output
+```
+
+#### For Non-Blocking Alerts with Branch Tracking
+Alert about TODOs without blocking commits:
+
+```yaml
+repos:
+  - repo: https://github.com/lasp/prevent-dangling-todos
+    hooks:
+      - id: prevent-dangling-todos
+        args: ['-j', 'MYJIRA', '--succeed-always', '-v']
+        always_run: true  # Check all files for branch-specific TODOs
+        verbose: true     # Always show output even when hook succeeds
+```
+
 ### Custom Comment Types
 
 Check only specific comment types:
@@ -64,7 +92,7 @@ repos:
         args: ['-j', 'MYJIRA', '-q']
 ```
 
-**Verbose Mode**: Shows configuration, violations, file status summary, and help text
+**Verbose Mode**: Shows configuration, violations, file status summary, help text, and branch-specific TODOs
 ```yaml
 repos:
   - repo: https://github.com/lasp/prevent-dangling-todos
@@ -73,11 +101,51 @@ repos:
         args: ['-j', 'MYJIRA', '-v']
 ```
 
+### Branch-Specific TODO Tracking
+
+The tool automatically detects your current git branch and extracts ticket IDs that match your configured Jira prefixes. When TODOs reference the current branch's ticket, they are displayed separately as informational warnings (yellow ⚠️) rather than violations (red ❌).
+
+#### Checking All Files (Including Untouched)
+
+By default, pre-commit only runs on modified files. To catch branch-specific TODOs in files that haven't been changed, configure the hook to **always run**:
+
+#### Complete Branch Tracking Configuration
+
+For full branch-specific TODO tracking, use both verbose and always_run:
+
+```yaml
+repos:
+  - repo: https://github.com/lasp/prevent-dangling-todos
+    hooks:
+      - id: prevent-dangling-todos
+        args: ['-j', 'MYJIRA', '-v']
+        always_run: true
+        verbose: true  # Ensure output is always shown
+```
+
+**Example branch detection:**
+- Branch: `feature/MYJIRA-123-user-auth`
+- Detected ticket: `MYJIRA-123`
+- TODOs with `MYJIRA-123` will be shown as warnings, not violations
+
+**Note:** Branch detection messages are only shown in verbose mode or when there are issues detecting the branch.
+
 ### Alert Without Blocking
 
 Alert developers to dangling TODOs without blocking commits. When using `--succeed-always`, the hook will always return exit code 0 (success), but by default pre-commit hides output from successful hooks. To ensure TODO violations are still visible, you should configure verbose output:
 
-**Recommended: Always show output (persistent configuration)**
+**Recommended: Always show output with branch tracking**
+```yaml
+repos:
+  - repo: https://github.com/lasp/prevent-dangling-todos
+    hooks:
+      - id: prevent-dangling-todos
+        args: ['-j', 'MYJIRA', '--succeed-always', '-v']
+        always_run: true  # Check all files for branch-specific TODOs
+        verbose: true  # Always show output, even when hook succeeds
+```
+
+**Alternative: Basic alert without branch tracking**
 ```yaml
 repos:
   - repo: https://github.com/lasp/prevent-dangling-todos
@@ -87,7 +155,7 @@ repos:
         verbose: true  # Always show output, even when hook succeeds
 ```
 
-**Alternative: Show output only when needed (runtime flag)**
+**Runtime flag approach (minimal configuration)**
 ```yaml
 repos:
   - repo: https://github.com/lasp/prevent-dangling-todos
@@ -167,6 +235,11 @@ TODO, FIXME, XXX, HACK, BUG, REVIEW, OPTIMIZE, REFACTOR
 ```
 ❌ file.py:15: # TODO: Missing Jira reference
 ❌ file.py:23: # FIXME: Another comment without ticket
+
+
+⚠️  Unresolved TODOs for current branch ticket MYJIRA-123:
+⚠️  auth.py:10: # TODO MYJIRA-123: Complete OAuth implementation
+⚠️  auth.py:25: # FIXME MYJIRA-123: Handle token refresh edge case
 ```
 
 **Quiet Mode**: No output (silent)
@@ -178,12 +251,18 @@ TODO, FIXME, XXX, HACK, BUG, REVIEW, OPTIMIZE, REFACTOR
 ❌ file.py:15: # TODO: Missing Jira reference
 ❌ file.py:23: # FIXME: Another comment without ticket
 
+⚠️  Unresolved TODOs for current branch ticket MYJIRA-123:
+⚠️  auth.py:10: # TODO MYJIRA-123: Complete OAuth implementation
+⚠️  auth.py:25: # FIXME MYJIRA-123: Handle token refresh edge case
+
 ✅ clean_file.py
 ❌ file.py
 
 💡 Please add Jira issue references to work comments like:
    // TODO MYJIRA-123: Implement user authentication
    # FIXME MYJIRA-124: Handle edge case for empty input
+
+Note: No ticket ID detected in current branch 'main'
 ```
 
 ## Troubleshooting
@@ -202,7 +281,17 @@ TODO, FIXME, XXX, HACK, BUG, REVIEW, OPTIMIZE, REFACTOR
    - Check that your comment format matches: `# TODO JIRA-123: Description`
    - Ensure the Jira prefix matches your configuration
 
-4. **False positives**
+4. **Branch-specific TODOs not appearing**
+   - **Solution**: Use `verbose: true` in your config
+   - Use `always_run: true` to check all files, not just modified ones
+   - Ensure your branch name contains a valid ticket ID (e.g., `feature/MYJIRA-123-description`)
+
+5. **Branch detection not working**
+   - Ensure you're in a git repository with a valid branch
+   - Check that your branch name includes a ticket ID matching your Jira prefixes
+   - Branch detection messages appear in verbose mode or when there are detection issues
+
+6. **False positives**
    - Use `-c/--comment-prefix` to check only specific comment types
    - Consider using `-q/--quiet` mode for silent operation in CI/CD pipelines
    - Use `-v/--verbose` mode when you need detailed information about what files are being checked
