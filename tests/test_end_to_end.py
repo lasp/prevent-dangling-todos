@@ -1,4 +1,4 @@
-"""End-to-end tests for branch-specific TODO tracking feature."""
+"""End-to-end tests for branch-specific TODO tracking feature."""  # noqa: FIX001
 
 import tempfile
 from unittest.mock import MagicMock, patch
@@ -9,17 +9,17 @@ from prevent_dangling_todos.cli import main
 
 
 class TestEndToEndBranchTodos:
-    """Test the complete branch-specific TODO tracking feature."""
+    """Test the complete branch-specific TODO tracking feature."""  # noqa: FIX001
 
     def test_branch_with_ticket_shows_yellow_warnings(self, capsys):
         """Test that TODOs for current branch ticket show as yellow warnings."""
         # Create a test file with various TODOs
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("# TODO: This has no reference\n")
-            f.write("# TODO LIBSDC-123: This is for the current ticket\n")
+            f.write("# TODO: This has no reference\n")  # noqa: FIX001
+            f.write("# TODO LIBSDC-123: This is for the current ticket\n")  # noqa: FIX001
             f.write("# FIXME: Another violation\n")
-            f.write("# TODO LIBSDC-456: This is for a different ticket\n")
-            f.write("# TODO LIBSDC-123: Another item for current ticket\n")
+            f.write("# TODO LIBSDC-456: This is for a different ticket\n")  # noqa: FIX001
+            f.write("# TODO LIBSDC-123: Another item for current ticket\n")  # noqa: FIX001
             temp_file = f.name
 
         try:
@@ -39,7 +39,7 @@ class TestEndToEndBranchTodos:
 
                 # Should show violations with red X
                 assert "❌" in captured.out
-                assert "TODO: This has no reference" in captured.out
+                assert "TODO: This has no reference" in captured.out  # noqa: FIX001
                 assert "FIXME: Another violation" in captured.out
 
                 # Should show yellow warnings for current ticket TODOs
@@ -47,9 +47,9 @@ class TestEndToEndBranchTodos:
                     "⚠️  Unresolved TODOs for current branch ticket LIBSDC-123:"
                     in captured.out
                 )
-                assert "TODO LIBSDC-123: This is for the current ticket" in captured.out
+                assert "TODO LIBSDC-123: This is for the current ticket" in captured.out  # noqa: FIX001
                 assert (
-                    "TODO LIBSDC-123: Another item for current ticket" in captured.out
+                    "TODO LIBSDC-123: Another item for current ticket" in captured.out  # noqa: FIX001
                 )
 
                 # Should NOT show other ticket TODOs in yellow section
@@ -63,7 +63,7 @@ class TestEndToEndBranchTodos:
     def test_branch_without_ticket_shows_note(self, capsys):
         """Test that branches without tickets show informational note."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("# TODO LIBSDC-123: Properly referenced TODO\n")
+            f.write("# TODO LIBSDC-123: Properly referenced TODO\n")  # noqa: FIX001
             temp_file = f.name
 
         try:
@@ -100,7 +100,7 @@ class TestEndToEndBranchTodos:
     def test_git_detection_failure_shows_note(self, capsys):
         """Test that git detection failures show informational note."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("# TODO LIBSDC-123: Properly referenced TODO\n")
+            f.write("# TODO LIBSDC-123: Properly referenced TODO\n")  # noqa: FIX001
             temp_file = f.name
 
         try:
@@ -133,8 +133,8 @@ class TestEndToEndBranchTodos:
     def test_quiet_mode_suppresses_all_branch_output(self, capsys):
         """Test that quiet mode suppresses branch detection messages and ticket TODOs."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("# TODO: This has no reference\n")
-            f.write("# TODO LIBSDC-123: This is for the current ticket\n")
+            f.write("# TODO: This has no reference\n")  # noqa: FIX001
+            f.write("# TODO LIBSDC-123: This is for the current ticket\n")  # noqa: FIX001
             temp_file = f.name
 
         try:
@@ -163,7 +163,7 @@ class TestEndToEndBranchTodos:
     def test_verbose_mode_with_ticket_todos(self, capsys):
         """Test verbose mode shows all information including ticket TODOs."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("# TODO LIBSDC-123: This is for the current ticket\n")
+            f.write("# TODO LIBSDC-123: This is for the current ticket\n")  # noqa: FIX001
             temp_file = f.name
 
         try:
@@ -201,8 +201,8 @@ class TestEndToEndBranchTodos:
     def test_multiple_jira_prefixes_with_branch_detection(self, capsys):
         """Test branch detection works with multiple Jira prefixes."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("# TODO PROJECT-456: This is for the current ticket\n")
-            f.write("# TODO TEAM-789: This is for a different project\n")
+            f.write("# TODO PROJECT-456: This is for the current ticket\n")  # noqa: FIX001
+            f.write("# TODO TEAM-789: This is for a different project\n")  # noqa: FIX001
             temp_file = f.name
 
         try:
@@ -226,7 +226,7 @@ class TestEndToEndBranchTodos:
                     in captured.out
                 )
                 assert (
-                    "TODO PROJECT-456: This is for the current ticket" in captured.out
+                    "TODO PROJECT-456: This is for the current ticket" in captured.out  # noqa: FIX001
                 )
 
                 # Should not show TEAM-789 in yellow warnings
@@ -245,8 +245,8 @@ class TestEndToEndBranchTodos:
     def test_succeed_always_with_ticket_todos(self, capsys):
         """Test that --succeed-always works with ticket TODOs."""
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-            f.write("# TODO: No reference\n")
-            f.write("# TODO LIBSDC-123: Current ticket\n")
+            f.write("# TODO: No reference\n")  # noqa: FIX001
+            f.write("# TODO LIBSDC-123: Current ticket\n")  # noqa: FIX001
             temp_file = f.name
 
         try:
@@ -266,7 +266,7 @@ class TestEndToEndBranchTodos:
 
                 # Should still show violations
                 assert "❌" in captured.out
-                assert "TODO: No reference" in captured.out
+                assert "TODO: No reference" in captured.out  # noqa: FIX001
 
                 # Should show ticket TODOs
                 assert (

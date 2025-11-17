@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pre-commit hook to check that TODO, FIXME, and other work comments include Jira issue references.
+Pre-commit hook to check that TODO, FIXME, and other work comments include Jira issue references.  # noqa: FIX001
 
 Usage: python prevent_todos.py file1.py file2.js ...
 """
@@ -26,7 +26,7 @@ class TodoChecker:
     """
     Check files for work comments that lack Jira issue references.
 
-    This class provides functionality to scan source code files for TODO, FIXME,
+    This class provides functionality to scan source code files for TODO, FIXME,  # noqa: FIX001
     and other work comments, ensuring they include proper Jira issue references.
 
     Attributes
@@ -34,7 +34,7 @@ class TodoChecker:
     jira_prefixes : list of str
         List of valid Jira project prefixes
     comment_prefixes : list of str
-        List of comment prefixes to check (e.g., TODO, FIXME)
+        List of comment prefixes to check (e.g., TODO, FIXME)  # noqa: FIX001
     quiet : bool
         Whether to suppress all output (silent mode)
     verbose : bool
@@ -69,7 +69,7 @@ class TodoChecker:
         jira_prefixes : str or list of str
             The Jira project prefix(es) to look for (e.g., "MYJIRA" or ["MYJIRA", "PROJECT"])
         comment_prefixes : list of str, optional
-            Comment prefixes to check (e.g., ["TODO", "FIXME"]). If None, uses default list.
+            Comment prefixes to check (e.g., ["TODO", "FIXME"]). If None, uses default list.  # noqa: FIX001
         quiet : bool, optional
             If True, suppress all output and only return exit codes. Default is False.
         verbose : bool, optional
@@ -98,16 +98,12 @@ class TodoChecker:
 
         # Comment prefixes that should require Jira references
         if comment_prefixes is None:
-            # Default list if not specified
+            # Default list matches flake8-fixme plugin (FIX001-FIX004)
             self.comment_prefixes = [
-                "TODO",
-                "FIXME",
-                "XXX",
-                "HACK",
-                "BUG",
-                "REVIEW",
-                "OPTIMIZE",
-                "REFACTOR",
+                "TODO",  # noqa: FIX001
+                "FIXME",  # noqa: FIX002
+                "XXX",  # noqa: FIX003
+                "HACK",  # noqa: FIX004
             ]
         else:
             self.comment_prefixes = comment_prefixes
@@ -124,6 +120,7 @@ class TodoChecker:
         This method creates two compiled regex patterns:
         - comment_pattern: Matches work comment prefixes
         - jira_pattern: Matches Jira issue references (or None if no prefixes)
+        - noqa_pattern: Matches noqa exclusion comments
         """
         # Pattern to find work comments
         prefixes_pattern = "|".join(self.comment_prefixes)
@@ -142,11 +139,17 @@ class TodoChecker:
         else:
             self.jira_pattern = None
 
+        # Pattern to find noqa exclusion comments
+        # Matches: noqa at end of line OR noqa with flake8 FIX codes (FIX001-FIX004)
+        self.noqa_pattern = re.compile(
+            r"noqa\s*$|noqa.*(?:FIX001|FIX002|FIX003|FIX004)", re.IGNORECASE
+        )
+
     def find_todos_with_grep(
         self, file_paths: List[str]
     ) -> Dict[str, List[Tuple[int, str]]]:
         """
-        Use grep for efficient TODO detection across multiple files.
+        Use grep for efficient TODO detection across multiple files.  # noqa: FIX001
 
         Parameters
         ----------
@@ -198,11 +201,13 @@ class TodoChecker:
                                 self.jira_pattern is None
                                 or not self.jira_pattern.search(content)
                             ):
-                                if file_path not in todos_by_file:
-                                    todos_by_file[file_path] = []
-                                todos_by_file[file_path].append(
-                                    (line_num, content.rstrip())
-                                )
+                                # Skip if line has noqa exclusion
+                                if not self.noqa_pattern.search(content):
+                                    if file_path not in todos_by_file:
+                                        todos_by_file[file_path] = []
+                                    todos_by_file[file_path].append(
+                                        (line_num, content.rstrip())
+                                    )
 
                             # Track current ticket TODOs (only if we have jira patterns)
                             elif (
@@ -474,8 +479,10 @@ class TodoChecker:
                         if self.jira_pattern is None or not self.jira_pattern.search(
                             line
                         ):
-                            violations.append((line_num, line.rstrip()))
-                        # If we have a current ticket, check if this TODO is for it
+                            # Skip if line has noqa exclusion
+                            if not self.noqa_pattern.search(line):
+                                violations.append((line_num, line.rstrip()))
+                        # If we have a current ticket, check if this TODO is for it  # noqa: FIX001
                         elif (
                             self.jira_pattern is not None
                             and self.current_ticket_id
@@ -516,7 +523,7 @@ class TodoChecker:
                     print(
                         "⚠️  Warning: No files provided and --check-unstaged not set. Nothing to check."
                     )
-                return 0 if self.succeed_always else 0
+                return 0  # Immediate success
             else:
                 # Check all unstaged files, filtered by pre-commit config
                 all_repo_files = self.get_all_repo_files()
@@ -672,7 +679,7 @@ class TodoChecker:
                         other_prefixes = ", ".join(self.jira_prefixes[1:])
                         print(f"   (Also valid: {other_prefixes})")
                 else:
-                    print("💡 Work comments (TODO, FIXME, etc.) are not allowed.")
+                    print("💡 Work comments (TODO, FIXME, etc.) are not allowed.")  # noqa: FIX001
                     print(
                         "   Please remove them or specify a Jira prefix to allow tracked work items."
                     )

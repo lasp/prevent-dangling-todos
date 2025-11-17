@@ -22,12 +22,12 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="prevent-dangling-todos",
         description=(
-            "Check source files for TODO/FIXME comments without Jira issue references.\n\n"
+            "Check source files for TODO/FIXME comments without Jira issue references.\n\n"  # noqa: FIX001
             "This tool helps maintain code quality by ensuring all work comments "
-            "(TODO, FIXME, etc.) are properly linked to tracking issues.\n\n"
+            "(TODO, FIXME, etc.) are properly linked to tracking issues.\n\n"  # noqa: FIX001
             "Configuration can be provided via command line arguments or environment variables:\n"
             "  JIRA_PREFIX=PREFIX1,PREFIX2,PREFIX3\n"
-            "  COMMENT_PREFIX=TODO,FIXME,XXX\n\n"
+            "  COMMENT_PREFIX=TODO,FIXME,XXX\n\n"  # noqa: FIX001
             "Command line arguments take precedence over environment variables."
         ),
         epilog=(
@@ -38,11 +38,11 @@ def create_parser() -> argparse.ArgumentParser:
             "      Use multiple Jira project prefixes (comma-separated)\n\n"
             "  %(prog)s -j PROJECT src/**/*.py\n"
             "      Check all Python files with PROJECT prefix\n\n"
-            "  %(prog)s -j MYJIRA -c TODO,FIXME *.js\n"
-            "      Check only TODO and FIXME comments\n\n"
+            "  %(prog)s -j MYJIRA -c TODO,FIXME *.js\n"  # noqa: FIX001
+            "      Check only TODO and FIXME comments\n\n"  # noqa: FIX001
             "  JIRA_PREFIX=MYJIRA,PROJECT %(prog)s file.py\n"
             "      Use environment variable for Jira prefixes\n\n"
-            "  COMMENT_PREFIX=TODO,FIXME %(prog)s -j MYJIRA file.py\n"
+            "  COMMENT_PREFIX=TODO,FIXME %(prog)s -j MYJIRA file.py\n"  # noqa: FIX001
             "      Environment variable for comment prefixes, CLI for Jira\n\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -65,7 +65,7 @@ def create_parser() -> argparse.ArgumentParser:
         help=(
             "Jira project prefix(es) to look for. For multiple prefixes, separate with commas: "
             "'MYJIRA,PROJECT,TEAM'. Can also be set via JIRA_PREFIX environment variable. "
-            "If not specified, ALL work comments (TODO, FIXME, etc.) will be disallowed."
+            "If not specified, ALL work comments (TODO, FIXME, etc.) will be disallowed."  # noqa: FIX001
         ),
     )
 
@@ -75,8 +75,8 @@ def create_parser() -> argparse.ArgumentParser:
         metavar="PREFIXES",
         help=(
             "Comment prefix(es) to check. For multiple prefixes, separate with commas: "
-            "'TODO,FIXME,XXX'. Can also be set via COMMENT_PREFIX environment variable. "
-            "Default: TODO, FIXME, XXX, HACK, BUG, REVIEW, OPTIMIZE, REFACTOR"
+            "'TODO,FIXME,XXX'. Can also be set via COMMENT_PREFIX environment variable. "  # noqa: FIX001
+            "Default: TODO, FIXME, XXX, HACK"  # noqa: FIX001
         ),
     )
 
@@ -173,7 +173,9 @@ def _get_current_git_branch() -> Tuple[Optional[str], Optional[str]]:
         return None, "Unable to detect current git branch"
 
 
-def _extract_ticket_id(branch_name: str, jira_prefixes: List[str]) -> Optional[str]:
+def _extract_ticket_id(
+    branch_name: str, jira_prefixes: List[str] | None
+) -> Optional[str]:
     """
     Extract a ticket ID from a branch name if it matches any of the Jira prefixes.
 
@@ -181,7 +183,7 @@ def _extract_ticket_id(branch_name: str, jira_prefixes: List[str]) -> Optional[s
     ----------
     branch_name : str
         The git branch name
-    jira_prefixes : list of str
+    jira_prefixes : list[str] | None
         List of valid Jira project prefixes
 
     Returns
@@ -236,7 +238,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     # Note: jira_prefixes is now optional. If not provided, ALL work comments are disallowed.
     if not final_jira_prefixes and not args.quiet:
         print(
-            "Note: No Jira prefix specified. ALL work comments (TODO, FIXME, etc.) will be disallowed."
+            "Note: No Jira prefix specified. ALL work comments (TODO, FIXME, etc.) will be disallowed."  # noqa: FIX001
         )
 
     # Configuration validation for conflicting options
@@ -249,7 +251,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     if args.quiet and final_succeed_always:
         print(
-            "Warning: Using --quiet with --succeed-always may reduce visibility of TODO violations. "
+            "Warning: Using --quiet with --succeed-always may reduce visibility of TODO violations. "  # noqa: FIX001
             "Consider using only --succeed-always if you want to see violation details.",
             file=sys.stderr,
         )

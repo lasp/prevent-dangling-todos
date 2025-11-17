@@ -80,8 +80,8 @@ class TestTodoChecker:
             assert isinstance(line_content, str)
             assert len(line_content) > 0
 
-        # Test multiple violation types are caught
-        assert len(violations) >= 5  # Based on test file content
+        # Test multiple violation types are caught (default 4: TODO, FIXME, XXX, HACK)  noqa: FIX001
+        assert len(violations) == 4  # Based on test file content with default prefixes
         violation_texts = [v[1] for v in violations]
         assert any("TODO:" in text for text in violation_texts)
         assert any("FIXME:" in text for text in violation_texts)
@@ -826,3 +826,160 @@ repos:
 
         assert str(py_file) in filtered
         assert str(md_file) not in filtered
+
+
+class TestNoqaExclusion:
+    """Test noqa exclusion functionality."""
+
+    def test_noqa_at_end_of_line(self, tmp_path):
+        """Test that lines ending with noqa are excluded."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# TODO: This should be ignored  noqa\n")
+
+        violations = checker.check_file(str(test_file))
+        assert len(violations) == 0
+
+    def test_noqa_with_trailing_whitespace(self, tmp_path):
+        """Test that lines with noqa and trailing whitespace are excluded."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# TODO: This should be ignored  noqa  \n")
+
+        violations = checker.check_file(str(test_file))
+        assert len(violations) == 0
+
+    def test_noqa_fix_code_identifier(self, tmp_path):
+        """Test that lines with noqa: FIX001 are excluded."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# TODO: This should be ignored  noqa: FIX001\n")
+
+        violations = checker.check_file(str(test_file))
+        assert len(violations) == 0
+
+    def test_noqa_fix_code_with_other_codes(self, tmp_path):
+        """Test that lines with noqa: FIX001 and other codes are excluded."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# TODO: This should be ignored  noqa: FIX001, E501\n")
+
+        violations = checker.check_file(str(test_file))
+        assert len(violations) == 0
+
+    def test_noqa_case_insensitive(self, tmp_path):
+        """Test that noqa matching is case insensitive."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        test_file.write_text(
+            "# TODO: This should be ignored  NOQA\n# FIXME: Also ignored  NoQa: FIX002\n"
+        )
+
+        violations = checker.check_file(str(test_file))
+        assert len(violations) == 0
+
+    def test_no_noqa_still_violation(self, tmp_path):
+        """Test that lines without noqa are still violations."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# TODO: This is a real violation\n")
+
+        violations = checker.check_file(str(test_file))
+        assert len(violations) == 1
+        assert "This is a real violation" in violations[0][1]
+
+    def test_noqa_other_identifier_still_violation(self, tmp_path):
+        """Test that noqa with other identifier (not FIX codes) is still a violation."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# TODO: This is NOT ignored  noqa: E501\n")
+
+        violations = checker.check_file(str(test_file))
+        assert len(violations) == 1
+        assert "This is NOT ignored" in violations[0][1]
+
+    def test_noqa_in_middle_not_excluded(self, tmp_path):
+        """Test that noqa in middle of line without FIX codes is not excluded."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        test_file.write_text(
+            "# TODO: mention noqa here but not at end or with identifier\n"
+        )
+
+        violations = checker.check_file(str(test_file))
+        assert len(violations) == 1
+
+    def test_noqa_mixed_with_regular_todos(self, tmp_path):
+        """Test file with mix of noqa and regular TODOs."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        content = """# TODO: First violation
+# TODO: This is ignored  noqa
+# FIXME: Second violation
+# HACK: This is also ignored  noqa: FIX004
+# TODO: Third violation
+"""
+        test_file.write_text(content)
+
+        violations = checker.check_file(str(test_file))
+        assert len(violations) == 3
+        assert any("First violation" in v[1] for v in violations)
+        assert any("Second violation" in v[1] for v in violations)
+        assert any("Third violation" in v[1] for v in violations)
+        assert not any("is ignored" in v[1] for v in violations)
+
+    def test_noqa_with_grep_method(self, tmp_path):
+        """Test that noqa exclusion works with grep-based detection."""
+        checker = TodoChecker(jira_prefixes="TEST")
+
+        # Create multiple files to trigger grep-based detection (4+ files)
+        files = []
+        for i in range(5):
+            test_file = tmp_path / f"test{i}.py"
+            if i == 0:
+                test_file.write_text("# TODO: Ignored  noqa\n")
+            elif i == 1:
+                test_file.write_text("# TODO: Violation here\n")
+            elif i == 2:
+                test_file.write_text("# FIXME: Ignored  noqa: FIX001\n")
+            else:
+                test_file.write_text("# Clean file\n")
+            files.append(str(test_file))
+
+        results = checker.find_todos_with_grep(files)
+
+        # Should only find the one violation (test1.py)
+        total_violations = sum(len(v) for v in results.values())
+        assert total_violations == 1
+        assert any(
+            "Violation here" in v[1]
+            for violations in results.values()
+            for v in violations
+        )
+
+    def test_noqa_with_valid_jira_reference(self, tmp_path):
+        """Test that noqa doesn't interfere with valid Jira references."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        test_file.write_text("# TODO TEST-123: This has valid ref and noqa  noqa\n")
+
+        violations = checker.check_file(str(test_file))
+        # Should pass because it has valid Jira reference (noqa check happens after Jira check)
+        assert len(violations) == 0
+
+    def test_all_fix_codes_excluded(self, tmp_path):
+        """Test that all four FIX codes (FIX001, FIX002, FIX003, FIX004) work correctly."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        test_file = tmp_path / "test.py"
+        content = """# TODO: Excluded with FIX001  noqa: FIX001
+# FIXME: Excluded with FIX002  noqa: FIX002
+# XXX: Excluded with FIX003  noqa: FIX003
+# HACK: Excluded with FIX004  noqa: FIX004
+# TODO: This is a violation
+"""
+        test_file.write_text(content)
+
+        violations = checker.check_file(str(test_file))
+        # Should only find one violation (the last TODO without noqa)
+        assert len(violations) == 1
+        assert "This is a violation" in violations[0][1]
