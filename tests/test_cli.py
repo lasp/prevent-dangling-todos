@@ -50,13 +50,14 @@ class TestCLI:
         assert "prevent-dangling-todos 0.1.0" in captured.out
 
     def test_no_arguments_shows_error(self, capsys):
-        """Test that running without arguments shows an error."""
+        """Test that running without arguments shows an error about missing Jira prefix."""
         with pytest.raises(SystemExit) as exc_info:
             main([])
 
         assert exc_info.value.code == 2
         captured = capsys.readouterr()
-        assert "error: the following arguments are required: FILE" in captured.err
+        # Now the error is about missing Jira prefix since files are optional
+        assert "Error: Jira project prefix(es) must be specified" in captured.err
 
     def test_clean_file_passes(self, capsys):
         """Test that a file with properly referenced TODOs passes with no output."""
@@ -90,7 +91,7 @@ class TestCLI:
         assert "❌" in captured.out
         assert "TODO: This is a violation" in captured.out
         assert "FIXME: Another violation" in captured.out
-        
+
         # Should not show config info or help text in standard mode
         assert "🔍 Checking work comments" not in captured.out
         assert "💡 Please add Jira issue references" not in captured.out
@@ -275,8 +276,6 @@ class TestCLI:
         assert "Work comment missing Jira reference" not in captured.out
         assert "💡 Please add Jira issue references" not in captured.out
 
-
-
     def test_quiet_and_succeed_always_warning(self, capsys):
         """Test warning when both --quiet and --succeed-always are used."""
         test_file = str(self.test_data_dir / "test_file_with_violations.py")
@@ -337,39 +336,65 @@ class TestCLI:
         captured = capsys.readouterr()
 
         # Should show config info
-        assert "🔍 Checking work comments for Jira references to projects MYJIRA" in captured.out
+        assert (
+            "🔍 Checking work comments for Jira references to projects MYJIRA"
+            in captured.out
+        )
         assert "Checking for:" in captured.out
-        
+
         # Should show violations with red X
         assert "❌" in captured.out
         assert "TODO: This is a violation" in captured.out
-        
+
         # Should show file status summary
         assert f"❌ {test_file}" in captured.out
-        
+
         # Should show help text
-        assert "💡 Please add Jira issue references to work comments like:" in captured.out
+        assert (
+            "💡 Please add Jira issue references to work comments like:" in captured.out
+        )
 
     def test_verbose_mode_with_clean_file(self, capsys):
         """Test verbose mode with clean file shows config and file status but no violations."""
         test_file = str(self.test_data_dir / "test_file_clean.py")
 
-        with pytest.raises(SystemExit) as exc_info:
-            main(["-j", "MYJIRA", "--verbose", test_file])
+        # Mock subprocess.run to handle both git branch detection and git ls-files
+        with patch("subprocess.run") as mock_run:
 
-        assert exc_info.value.code == 0
-        captured = capsys.readouterr()
+            def side_effect(cmd, **kwargs):
+                mock_result = MagicMock()
+                if "rev-parse" in cmd:  # git branch detection
+                    mock_result.returncode = 1  # No git
+                elif "ls-files" in cmd:  # git ls-files
+                    mock_result.returncode = 0
+                    # Return only the test file to avoid checking other files
+                    mock_result.stdout = test_file
+                else:
+                    mock_result.returncode = 0
+                    mock_result.stdout = ""
+                return mock_result
 
-        # Should show config info
-        assert "🔍 Checking work comments for Jira references to projects MYJIRA" in captured.out
-        assert "Checking for:" in captured.out
-        
-        # Should show file status with checkmark
-        assert f"✅ {test_file}" in captured.out
-        
-        # Should not show violations or help text
-        assert "❌" not in captured.out
-        assert "💡 Please add Jira issue references" not in captured.out
+            mock_run.side_effect = side_effect
+
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", "--verbose", test_file])
+
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+
+            # Should show config info
+            assert (
+                "🔍 Checking work comments for Jira references to projects MYJIRA"
+                in captured.out
+            )
+            assert "Checking for:" in captured.out
+
+            # Should show file status with checkmark
+            assert f"✅ {test_file}" in captured.out
+
+            # Should not show violations or help text
+            assert "❌" not in captured.out
+            assert "💡 Please add Jira issue references" not in captured.out
 
     def test_verbose_mode_multiple_files(self, capsys):
         """Test verbose mode with multiple files shows status for each."""
@@ -383,16 +408,19 @@ class TestCLI:
         captured = capsys.readouterr()
 
         # Should show config info
-        assert "🔍 Checking work comments for Jira references to projects MYJIRA" in captured.out
-        
+        assert (
+            "🔍 Checking work comments for Jira references to projects MYJIRA"
+            in captured.out
+        )
+
         # Should show violations
         assert "❌" in captured.out
         assert "TODO: This is a violation" in captured.out
-        
+
         # Should show status for both files
         assert f"✅ {clean_file}" in captured.out
         assert f"❌ {violation_file}" in captured.out
-        
+
         # Should show help text since there were violations
         assert "💡 Please add Jira issue references" in captured.out
 
@@ -472,9 +500,7 @@ class TestBranchDetection:
             == "PROJECT-456"
         )
         assert _extract_ticket_id("TEAM-789-simple-branch", ["TEAM"]) == "TEAM-789"
-        assert (
-            _extract_ticket_id("release/v1.0-MYJIRA-100", ["MYJIRA"]) == "MYJIRA-100"
-        )
+        assert _extract_ticket_id("release/v1.0-MYJIRA-100", ["MYJIRA"]) == "MYJIRA-100"
 
         # Test multiple prefixes
         assert (
@@ -535,7 +561,9 @@ class TestBranchDetection:
             assert exc_info.value.code == 0
             captured = capsys.readouterr()
             # Should show informational message about no ticket
-            assert "Note: No ticket ID detected in current branch 'main'" in captured.out
+            assert (
+                "Note: No ticket ID detected in current branch 'main'" in captured.out
+            )
 
     def test_cli_git_detection_failure(self, capsys):
         """Test CLI when git branch detection fails."""
@@ -575,3 +603,74 @@ class TestBranchDetection:
             captured = capsys.readouterr()
             # Quiet mode should suppress branch detection messages
             assert captured.out == ""
+
+    def test_no_files_argument(self, capsys, monkeypatch):
+        """Test that CLI works when no files are provided."""
+        # Mock git ls-files to return test files
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "file1.py\nfile2.js\ntest.md"
+
+        with patch("subprocess.run", return_value=mock_result):
+            # This should not raise an error
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA"])
+
+            # Should exit with 0 since no staged files have violations
+            assert exc_info.value.code == 0
+
+    def test_no_files_with_verbose(self, capsys):
+        """Test verbose output when no files are provided."""
+        # Mock git ls-files
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = "file1.py\nfile2.js"
+
+        with patch("subprocess.run", return_value=mock_result):
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", "--verbose"])
+
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+
+            # Should indicate no files were provided
+            assert (
+                "No specific files provided" in captured.out
+                or "checking all tracked files" in captured.out
+            )
+
+    def test_staged_vs_unstaged_differentiation(self, capsys, tmp_path):
+        """Test that staged files produce errors while unstaged produce warnings."""
+        # Create test files
+        staged_file = tmp_path / "staged.py"
+        staged_file.write_text("# TODO: Missing reference in staged file\n")
+
+        # Mock git ls-files to return additional unstaged files
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = f"{staged_file}\nother_file.py"
+
+        with patch("subprocess.run", return_value=mock_result):
+            with patch("os.path.isfile", return_value=True):
+                with patch(
+                    "builtins.open",
+                    side_effect=[
+                        # For the staged file check
+                        staged_file.open("r"),
+                        # For the unstaged file check (mock content)
+                        MagicMock(
+                            __enter__=lambda s: iter(["# TODO: Missing in unstaged\n"]),
+                            __exit__=lambda s, *_: None,
+                        ),
+                    ],
+                ):
+                    with pytest.raises(SystemExit) as exc_info:
+                        main(["-j", "MYJIRA", str(staged_file)])
+
+                    # Should fail because staged file has violations
+                    assert exc_info.value.code == 1
+                    captured = capsys.readouterr()
+
+                    # Check for proper formatting
+                    assert "ERROR:" in captured.out
+                    assert "WARNING:" in captured.out

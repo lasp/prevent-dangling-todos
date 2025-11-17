@@ -1,6 +1,7 @@
 """Unit tests for the prevent_todos module."""
 
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 import pytest
 
 from prevent_dangling_todos.prevent_todos import TodoChecker
@@ -146,8 +147,14 @@ class TestTodoChecker:
         assert "❌" in captured.out
         assert "TODO: This is a violation" in captured.out
         # Should not show config info or help text in standard mode
-        assert "🔍 Checking work comments for Jira references to projects" not in captured.out
-        assert "💡 Please add Jira issue references to work comments like:" not in captured.out
+        assert (
+            "🔍 Checking work comments for Jira references to projects"
+            not in captured.out
+        )
+        assert (
+            "💡 Please add Jira issue references to work comments like:"
+            not in captured.out
+        )
 
     def test_multiple_jira_prefixes(self, test_data_dir, capsys):
         """Test comprehensive multiple JIRA prefix functionality."""
@@ -239,7 +246,9 @@ class TestTodoChecker:
         checker_succeed = TodoChecker(jira_prefixes="MYJIRA", succeed_always=True)
         exit_code = checker_succeed.check_files([test_file])
         assert exit_code == 0  # Should return 0 due to succeed_always
-        assert checker_succeed.exit_code == 1  # Internal state should still track violations
+        assert (
+            checker_succeed.exit_code == 1
+        )  # Internal state should still track violations
 
         captured = capsys.readouterr()
         # Should still show violations in output (standard mode)
@@ -257,16 +266,12 @@ class TestTodoChecker:
         """Test succeed_always behavior combined with quiet mode."""
         test_file = str(test_data_dir / "test_file_with_violations.py")
 
-        checker = TodoChecker(
-            jira_prefixes="MYJIRA", 
-            quiet=True, 
-            succeed_always=True
-        )
+        checker = TodoChecker(jira_prefixes="MYJIRA", quiet=True, succeed_always=True)
         exit_code = checker.check_files([test_file])
-        
+
         assert exit_code == 0  # Should return 0 due to succeed_always
         captured = capsys.readouterr()
-        
+
         # Quiet mode should have no output at all
         assert captured.out == ""
 
@@ -318,9 +323,7 @@ class TestTicketTodoTracking:
     def test_ticket_todo_tracking(self, test_data_dir):
         """Test that TODOs matching current ticket are tracked separately."""
         # Create checker with current ticket ID that exists in the file
-        checker = TodoChecker(
-            jira_prefixes="MYJIRA", current_ticket_id="MYJIRA-100"
-        )
+        checker = TodoChecker(jira_prefixes="MYJIRA", current_ticket_id="MYJIRA-100")
 
         # Check a file that has TODOs with MYJIRA-100
         test_file = str(test_data_dir / "test_file_clean.py")
@@ -349,7 +352,9 @@ class TestTicketTodoTracking:
         captured = capsys.readouterr()
 
         # Should show yellow warning for ticket TODOs
-        assert "⚠️  Unresolved TODOs for current branch ticket MYJIRA-100:" in captured.out
+        assert (
+            "⚠️  Unresolved TODOs for current branch ticket MYJIRA-100:" in captured.out
+        )
         assert "⚠️" in captured.out
         assert "MYJIRA-100" in captured.out
 
@@ -392,7 +397,8 @@ class TestTicketTodoTracking:
         """Test ticket TODOs shown along with violations."""
         # Create a test file with both violations and ticket TODOs
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write("# TODO: This has no reference\n")
             f.write("# TODO MYJIRA-123: This is for the current ticket\n")
             f.write("# FIXME: Another violation\n")
@@ -416,14 +422,22 @@ class TestTicketTodoTracking:
             assert "FIXME: Another violation" in captured.out
 
             # Should also show ticket TODOs with yellow warning
-            assert "⚠️  Unresolved TODOs for current branch ticket MYJIRA-123:" in captured.out
+            assert (
+                "⚠️  Unresolved TODOs for current branch ticket MYJIRA-123:"
+                in captured.out
+            )
             assert "TODO MYJIRA-123: This is for the current ticket" in captured.out
 
             # Should not show TODOs for other tickets in the yellow section
-            assert "TODO MYJIRA-456" not in captured.out.split("⚠️  Unresolved TODOs")[1] if "⚠️  Unresolved TODOs" in captured.out else True
+            assert (
+                "TODO MYJIRA-456" not in captured.out.split("⚠️  Unresolved TODOs")[1]
+                if "⚠️  Unresolved TODOs" in captured.out
+                else True
+            )
 
         finally:
             import os
+
             os.unlink(temp_file)
 
     def test_ticket_todos_do_not_affect_exit_code(self, test_data_dir):
@@ -456,3 +470,97 @@ class TestTicketTodoTracking:
         # Should not track or show any ticket TODOs
         assert len(checker.ticket_todos) == 0
         assert "⚠️  Unresolved TODOs for current branch ticket" not in captured.out
+
+    def test_find_todos_with_grep(self, tmp_path):
+        """Test grep-based TODO detection."""
+        checker = TodoChecker(jira_prefixes="TEST", quiet=True)
+
+        # Create test files
+        file1 = tmp_path / "file1.py"
+        file1.write_text("# TODO: Missing reference\n# TODO TEST-123: Valid\n")
+
+        file2 = tmp_path / "file2.py"
+        file2.write_text("# FIXME: Another missing\nprint('hello')\n")
+
+        # Test grep functionality
+        results = checker.find_todos_with_grep([str(file1), str(file2)])
+
+        # Should find violations in both files
+        assert str(file1) in results
+        assert str(file2) in results
+
+        # Check specific violations
+        file1_violations = results[str(file1)]
+        assert any("TODO: Missing reference" in v[1] for v in file1_violations)
+        # Should not include the valid TODO
+        assert not any("TODO TEST-123" in v[1] for v in file1_violations)
+
+        file2_violations = results[str(file2)]
+        assert any("FIXME: Another missing" in v[1] for v in file2_violations)
+
+    def test_get_all_repo_files(self):
+        """Test repository file discovery."""
+        checker = TodoChecker(jira_prefixes="TEST", quiet=True)
+
+        # Mock subprocess.run for git ls-files
+        mock_result = MagicMock()
+        mock_result.returncode = 0
+        mock_result.stdout = (
+            "file1.py\nfile2.js\nREADME.md\ntest.png\ntests/test_file.py"
+        )
+
+        with patch("subprocess.run", return_value=mock_result):
+            files = checker.get_all_repo_files()
+
+            # Should include source files
+            assert "file1.py" in files
+            assert "file2.js" in files
+
+            # Should exclude README, images, and test files
+            assert "README.md" not in files
+            assert "test.png" not in files
+            assert "tests/test_file.py" not in files
+
+    def test_check_files_with_no_files_provided(self, capsys):
+        """Test check_files when no files are provided (None)."""
+        checker = TodoChecker(jira_prefixes="TEST", quiet=False)
+
+        # Mock get_all_repo_files
+        with patch.object(
+            checker, "get_all_repo_files", return_value=["file1.py", "file2.py"]
+        ):
+            with patch.object(checker, "check_file", return_value=[]):
+                exit_code = checker.check_files(None)
+
+                # Should succeed with no violations
+                assert exit_code == 0
+
+    def test_staged_vs_unstaged_output(self, tmp_path, capsys):
+        """Test that staged and unstaged violations are displayed differently."""
+        checker = TodoChecker(jira_prefixes="TEST", quiet=False)
+
+        # Create test files
+        staged_file = tmp_path / "staged.py"
+        staged_file.write_text("# TODO: Staged violation\n")
+
+        unstaged_file = tmp_path / "unstaged.py"
+        unstaged_file.write_text("# FIXME: Unstaged violation\n")
+
+        # Mock get_all_repo_files to return both files
+        with patch.object(
+            checker,
+            "get_all_repo_files",
+            return_value=[str(staged_file), str(unstaged_file)],
+        ):
+            # Pass only staged file as argument
+            exit_code = checker.check_files([str(staged_file)])
+
+            # Should fail because staged file has violations
+            assert exit_code == 1
+
+            captured = capsys.readouterr()
+            # Check for different output formats
+            assert "ERROR:" in captured.out
+            assert "WARNING:" in captured.out
+            assert "Staged violation" in captured.out
+            assert "Unstaged violation" in captured.out
