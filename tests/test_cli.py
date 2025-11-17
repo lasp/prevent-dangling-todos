@@ -31,7 +31,7 @@ class TestCLI:
         captured = capsys.readouterr()
 
         # Check for key elements in help text
-        assert "Check source files for TODO/FIXME comments" in captured.out
+        assert "Check source files for TODO/FIXME comments" in captured.out  # noqa: FIX001
         assert "--jira-prefix" in captured.out
         assert "--comment-prefix" in captured.out
         assert "--quiet" in captured.out
@@ -98,7 +98,7 @@ class TestCLI:
 
         # Standard mode should show violations with red X marks
         assert "❌" in captured.out
-        assert "TODO: This is a violation" in captured.out
+        assert "TODO: This is a violation" in captured.out  # noqa: FIX001
         assert "FIXME: Another violation" in captured.out
 
         # Should not show config info or help text in standard mode
@@ -137,7 +137,7 @@ class TestCLI:
 
         # Should show violations with red X marks
         assert "❌" in captured.out
-        assert "TODO: This is a violation" in captured.out
+        assert "TODO: This is a violation" in captured.out  # noqa: FIX001
         # Should not show config info or help text in standard mode
         assert "projects MYJIRA, PROJECT, TEAM" not in captured.out
         assert "(Also valid: PROJECT, TEAM)" not in captured.out
@@ -146,19 +146,19 @@ class TestCLI:
         """Test filtering specific comment prefixes."""
         test_file = str(self.test_data_dir / "test_file_single_todo.py")
 
-        # Test checking only TODO comments
+        # Test checking only TODO comments  # noqa: FIX001
         with pytest.raises(SystemExit) as exc_info:
-            main(["-j", "MYJIRA", "-c", "TODO", test_file])
+            main(["-j", "MYJIRA", "-c", "TODO", test_file])  # noqa: FIX001
 
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
 
-        # Should find TODO violation but not show config info in standard mode
-        assert "TODO: This TODO has no reference" in captured.out
+        # Should find TODO violation but not show config info in standard mode  # noqa: FIX001
+        assert "TODO: This TODO has no reference" in captured.out  # noqa: FIX001
         assert "❌" in captured.out
         # Should not show config info in standard mode
-        assert "Checking for: TODO" not in captured.out
-        # Should not show FIXME violations since we're only checking TODO
+        assert "Checking for: TODO" not in captured.out  # noqa: FIX001
+        # Should not show FIXME violations since we're only checking TODO  # noqa: FIX001
         assert "FIXME: Missing reference FIXME" not in captured.out
 
     def test_quiet_mode(self, capsys):
@@ -221,17 +221,19 @@ class TestCLI:
             # Test 2: Both JIRA_PREFIX and COMMENT_PREFIX environment variables with violations
             test_file = str(self.test_data_dir / "test_file_single_todo.py")
             monkeypatch.setenv("JIRA_PREFIX", "MYJIRA")
-            monkeypatch.setenv("COMMENT_PREFIX", "TODO,XXX")
+            monkeypatch.setenv("COMMENT_PREFIX", "TODO,XXX")  # noqa: FIX001
 
             with pytest.raises(SystemExit) as exc_info:
                 main([test_file])
 
-            assert exc_info.value.code == 1  # Should find TODO violations
+            assert (
+                exc_info.value.code == 1
+            )  # Should find TODO violations  # noqa: FIX001
             captured = capsys.readouterr()
             # Standard mode should show violations but not config info
             assert "❌" in captured.out
-            assert "TODO: This TODO has no reference" in captured.out
-            assert "Checking for: TODO, XXX" not in captured.out
+            assert "TODO: This TODO has no reference" in captured.out  # noqa: FIX001
+            assert "Checking for: TODO, XXX" not in captured.out  # noqa: FIX001
 
             # Test 3: CLI arguments override environment variables - clean file should have no output
             test_file = str(self.test_data_dir / "test_file_clean.py")
@@ -239,7 +241,7 @@ class TestCLI:
             monkeypatch.setenv("COMMENT_PREFIX", "WRONGCOMMENT")
 
             with pytest.raises(SystemExit) as exc_info:
-                main(["-j", "MYJIRA", "-c", "TODO", test_file])
+                main(["-j", "MYJIRA", "-c", "TODO", test_file])  # noqa: FIX001
 
             assert exc_info.value.code == 0
             captured = capsys.readouterr()
@@ -321,7 +323,7 @@ class TestCLI:
 
         # Should still show violations in standard mode (violations only with red X)
         assert "❌" in captured.out
-        assert "TODO: This is a violation" in captured.out
+        assert "TODO: This is a violation" in captured.out  # noqa: FIX001
         # Should not show config info or help text in standard mode
         assert "Work comment missing Jira reference" not in captured.out
         assert "💡 Please add Jira issue references" not in captured.out
@@ -338,7 +340,7 @@ class TestCLI:
 
         # Should show configuration warning to stderr
         assert "Warning: Using --quiet with --succeed-always" in captured.err
-        assert "may reduce visibility of TODO violations" in captured.err
+        assert "may reduce visibility of TODO violations" in captured.err  # noqa: FIX001
 
         # Should have no output to stdout in quiet mode
         assert captured.out == ""
@@ -394,7 +396,7 @@ class TestCLI:
 
         # Should show violations with red X
         assert "❌" in captured.out
-        assert "TODO: This is a violation" in captured.out
+        assert "TODO: This is a violation" in captured.out  # noqa: FIX001
 
         # Should show file status summary
         assert f"❌ {test_file}" in captured.out
@@ -465,7 +467,7 @@ class TestCLI:
 
         # Should show violations
         assert "❌" in captured.out
-        assert "TODO: This is a violation" in captured.out
+        assert "TODO: This is a violation" in captured.out  # noqa: FIX001
 
         # Should show status for both files
         assert f"✅ {clean_file}" in captured.out
@@ -750,10 +752,10 @@ class TestBranchDetection:
         """Test that staged files produce errors while unstaged produce warnings when --check-unstaged is set."""
         # Create test files
         staged_file = tmp_path / "staged.py"
-        staged_file.write_text("# TODO: Missing reference in staged file\n")
+        staged_file.write_text("# TODO: Missing reference in staged file\n")  # noqa: FIX001
 
         unstaged_file = tmp_path / "unstaged.py"
-        unstaged_file.write_text("# TODO: Missing in unstaged\n")
+        unstaged_file.write_text("# TODO: Missing in unstaged\n")  # noqa: FIX001
 
         # Mock git ls-files to return additional unstaged files
         mock_result = MagicMock()
@@ -776,7 +778,7 @@ class TestBranchDetection:
         """Test that without --check-unstaged, only staged files are checked."""
         # Create test files
         staged_file = tmp_path / "staged.py"
-        staged_file.write_text("# TODO: Missing reference in staged file\n")
+        staged_file.write_text("# TODO: Missing reference in staged file\n")  # noqa: FIX001
 
         with pytest.raises(SystemExit) as exc_info:
             main(["-j", "MYJIRA", str(staged_file)])

@@ -1,14 +1,15 @@
 repos:
-  # # Local hook for prevent-dangling-todos (this repository)
-  # - repo: local
-  #   hooks:
-  #     - id: prevent-dangling-todos
-  #       name: prevent-dangling-todos
-  #       entry: prevent-dangling-todos
-  #       language: python
-  #       types: [text]
-  #       args: ["--check-unstaged"]
-  #       always_run: true
+  # Local hook for prevent-dangling-todos (this repository)
+  - repo: local
+    hooks:
+      - id: prevent-dangling-todos
+        name: prevent-dangling-todos
+        entry: prevent-dangling-todos
+        language: python
+        types: [text]
+        args: ["--check-unstaged", "--comment-prefix=TODO"]
+        exclude: '^\.pre-commit-config\.yaml$|^tests/.*$'
+        always_run: true
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
