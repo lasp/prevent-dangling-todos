@@ -182,7 +182,7 @@ class TestEndToEndBranchTodos:
                 captured = capsys.readouterr()
 
                 # Should show config info
-                assert "🔍 Checking work comments for Jira references" in captured.out
+                assert "🔍 Checking work comments for ticket references" in captured.out
 
                 # Should show yellow warnings for ticket TODOs
                 assert (

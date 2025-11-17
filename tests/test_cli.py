@@ -32,11 +32,12 @@ class TestCLI:
 
         # Check for key elements in help text
         assert "Check source files for TODO/FIXME comments" in captured.out  # noqa: FIX001
-        assert "--jira-prefix" in captured.out
+        assert "--ticket-prefix" in captured.out  # New primary option
+        assert "--jira-prefix" in captured.out  # Deprecated but still shown
         assert "--comment-prefix" in captured.out
         assert "--quiet" in captured.out
         assert "Examples:" in captured.out
-        assert "multiple Jira project prefixes" in captured.out
+        assert "multiple ticket prefixes" in captured.out
         assert "comma-separated" in captured.out
         assert "environment variable" in captured.out
 
@@ -50,7 +51,7 @@ class TestCLI:
         assert "prevent-dangling-todos 0.1.0" in captured.out
 
     def test_no_arguments_checks_all_files(self, capsys):
-        """Test that running without arguments checks all tracked files with no jira prefix (disallow ALL TODOs)."""
+        """Test that running without arguments checks all tracked files with no ticket prefix (disallow ALL TODOs)."""
         # Mock git ls-files to return test files
         with patch("subprocess.run") as mock_run:
             mock_result = MagicMock()
@@ -61,11 +62,11 @@ class TestCLI:
             with pytest.raises(SystemExit) as exc_info:
                 main([])
 
-            # Should run successfully (no jira prefix means disallow all TODOs)
+            # Should run successfully (no ticket prefix means disallow all TODOs)
             assert exc_info.value.code == 0
             captured = capsys.readouterr()
-            # Should show informational message about no jira prefix
-            assert "No Jira prefix specified" in captured.out
+            # Should show informational message about no ticket prefix
+            assert "No ticket prefix specified" in captured.out
             assert "ALL work comments" in captured.out
 
     def test_clean_file_passes(self, capsys):
@@ -103,7 +104,7 @@ class TestCLI:
 
         # Should not show config info or help text in standard mode
         assert "🔍 Checking work comments" not in captured.out
-        assert "💡 Please add Jira issue references" not in captured.out
+        assert "💡 Please add ticket/issue references" not in captured.out
 
     def test_multiple_jira_prefixes(self, capsys):
         """Test multiple JIRA prefixes in both success and failure cases."""
@@ -268,7 +269,7 @@ class TestCLI:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
         # Should show informational message about no jira prefix
-        assert "No Jira prefix specified" in captured.out
+        assert "No ticket prefix specified" in captured.out
         assert "ALL work comments" in captured.out
         # Should show violations
         assert "❌" in captured.out
@@ -292,7 +293,7 @@ class TestCLI:
             assert exc_info.value.code == 0
             captured = capsys.readouterr()
             # Should show informational message about no jira prefix
-            assert "No Jira prefix specified" in captured.out
+            assert "No ticket prefix specified" in captured.out
 
     def test_no_jira_prefix_with_valid_jira_references(self, capsys):
         """Test that even valid Jira references are violations when no jira prefix is specified."""
@@ -308,7 +309,7 @@ class TestCLI:
         assert exc_info.value.code == 1
         captured = capsys.readouterr()
         assert "❌" in captured.out
-        assert "No Jira prefix specified" in captured.out
+        assert "No ticket prefix specified" in captured.out
 
     def test_succeed_always_cli_option(self, capsys):
         """Test --succeed-always CLI option works correctly."""
@@ -326,7 +327,7 @@ class TestCLI:
         assert "TODO: This is a violation" in captured.out  # noqa: FIX001
         # Should not show config info or help text in standard mode
         assert "Work comment missing Jira reference" not in captured.out
-        assert "💡 Please add Jira issue references" not in captured.out
+        assert "💡 Please add ticket/issue references" not in captured.out
 
     def test_quiet_and_succeed_always_warning(self, capsys):
         """Test warning when both --quiet and --succeed-always are used."""
@@ -389,7 +390,7 @@ class TestCLI:
 
         # Should show config info
         assert (
-            "🔍 Checking work comments for Jira references to projects MYJIRA"
+            "🔍 Checking work comments for ticket references to projects MYJIRA"
             in captured.out
         )
         assert "Checking for:" in captured.out
@@ -403,7 +404,8 @@ class TestCLI:
 
         # Should show help text
         assert (
-            "💡 Please add Jira issue references to work comments like:" in captured.out
+            "💡 Please add ticket/issue references to work comments like:"
+            in captured.out
         )
 
     def test_verbose_mode_with_clean_file(self, capsys):
@@ -436,7 +438,7 @@ class TestCLI:
 
             # Should show config info
             assert (
-                "🔍 Checking work comments for Jira references to projects MYJIRA"
+                "🔍 Checking work comments for ticket references to projects MYJIRA"
                 in captured.out
             )
             assert "Checking for:" in captured.out
@@ -446,7 +448,7 @@ class TestCLI:
 
             # Should not show violations or help text
             assert "❌" not in captured.out
-            assert "💡 Please add Jira issue references" not in captured.out
+            assert "💡 Please add ticket/issue references" not in captured.out
 
     def test_verbose_mode_multiple_files(self, capsys):
         """Test verbose mode with multiple files shows status for each."""
@@ -461,7 +463,7 @@ class TestCLI:
 
         # Should show config info
         assert (
-            "🔍 Checking work comments for Jira references to projects MYJIRA"
+            "🔍 Checking work comments for ticket references to projects MYJIRA"
             in captured.out
         )
 
@@ -474,7 +476,7 @@ class TestCLI:
         assert f"❌ {violation_file}" in captured.out
 
         # Should show help text since there were violations
-        assert "💡 Please add Jira issue references" in captured.out
+        assert "💡 Please add ticket/issue references" in captured.out
 
     def test_verbose_quiet_mutually_exclusive(self, capsys):
         """Test that --verbose and --quiet are mutually exclusive."""

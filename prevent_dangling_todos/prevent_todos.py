@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Pre-commit hook to check that TODO, FIXME, and other work comments include Jira issue references.  # noqa: FIX001
+Pre-commit hook to check that TODO, FIXME, and other work comments include ticket references. # noqa: FIX001
 
 Usage: python prevent_todos.py file1.py file2.js ...
 """
@@ -17,15 +17,15 @@ from identify import identify
 
 class TodoChecker:
     """
-    Check files for work comments that lack Jira issue references.
+    Check files for work comments that lack ticket references.
 
     This class provides functionality to scan source code files for TODO, FIXME,  # noqa: FIX001
-    and other work comments, ensuring they include proper Jira issue references.
+    and other work comments, ensuring they include proper ticket/issue references.
 
     Attributes
     ----------
-    jira_prefixes : list of str
-        List of valid Jira project prefixes
+    ticket_prefixes : list of str
+        List of valid ticket/issue prefixes (e.g., JIRA, GITHUB, LINEAR)
     comment_prefixes : list of str
         List of comment prefixes to check (e.g., TODO, FIXME)  # noqa: FIX001
     quiet : bool
@@ -40,13 +40,13 @@ class TodoChecker:
         Track exit code for violations (0 = success, 1 = violations found)
     comment_pattern : re.Pattern
         Compiled regex for matching work comments
-    jira_pattern : re.Pattern
-        Compiled regex for matching Jira references
+    ticket_pattern : re.Pattern
+        Compiled regex for matching ticket references
     """
 
     def __init__(
         self,
-        jira_prefixes: Union[str, List[str]],
+        ticket_prefixes: Union[str, List[str]],
         comment_prefixes: List[str],
         quiet: bool = False,
         verbose: bool = False,
@@ -59,8 +59,9 @@ class TodoChecker:
 
         Parameters
         ----------
-        jira_prefixes : str or list of str
-            The Jira project prefix(es) to look for (e.g., "MYJIRA" or ["MYJIRA", "PROJECT"])
+        ticket_prefixes : str or list of str
+            The ticket prefix(es) to look for (e.g., "MYJIRA", "GITHUB", "LINEAR")
+            Can be from any issue tracking system (Jira, GitHub Issues, Linear, etc.)
         comment_prefixes : list of str
             Comment prefixes to check (e.g., ["TODO", "FIXME"])  # noqa: FIX001
         quiet : bool, optional
@@ -76,10 +77,10 @@ class TodoChecker:
             If True, also check unstaged files for violations (as warnings). Default is False.
         """
         # Always store as list internally
-        if isinstance(jira_prefixes, str):
-            self.jira_prefixes = [jira_prefixes]
+        if isinstance(ticket_prefixes, str):
+            self.ticket_prefixes = [ticket_prefixes]
         else:
-            self.jira_prefixes = jira_prefixes
+            self.ticket_prefixes = ticket_prefixes
 
         self.quiet = quiet
         self.verbose = verbose
@@ -89,7 +90,7 @@ class TodoChecker:
         self.current_ticket_id = current_ticket_id
         self.ticket_todos: list[tuple] = []  # Track TODOs for the current ticket
 
-        # Comment prefixes that should require Jira references
+        # Comment prefixes that should require ticket references
         self.comment_prefixes = comment_prefixes
 
         # Build regex patterns
@@ -97,31 +98,31 @@ class TodoChecker:
 
     def _build_patterns(self) -> None:
         """
-        Build regex patterns for matching comments and Jira references.
+        Build regex patterns for matching comments and ticket references.
 
         Notes
         -----
         This method creates two compiled regex patterns:
         - comment_pattern: Matches work comment prefixes
-        - jira_pattern: Matches Jira issue references (or None if no prefixes)
+        - ticket_pattern: Matches ticket/issue references (or None if no prefixes)
         - noqa_pattern: Matches noqa exclusion comments
         """
         # Pattern to find work comments
         prefixes_pattern = "|".join(self.comment_prefixes)
         self.comment_pattern = re.compile(rf"\b({prefixes_pattern})\b")
 
-        # Pattern to find Jira references - match any of the allowed prefixes
-        # If no jira prefixes are provided, jira_pattern will be None
+        # Pattern to find ticket references - match any of the allowed prefixes
+        # If no ticket prefixes are provided, ticket_pattern will be None
         # meaning ALL work comments are violations
-        if self.jira_prefixes:
-            jira_prefixes_pattern = "|".join(
-                re.escape(prefix) for prefix in self.jira_prefixes
+        if self.ticket_prefixes:
+            ticket_prefixes_pattern = "|".join(
+                re.escape(prefix) for prefix in self.ticket_prefixes
             )
-            self.jira_pattern: Optional[re.Pattern] = re.compile(
-                rf"({jira_prefixes_pattern})-\d+"
+            self.ticket_pattern: Optional[re.Pattern] = re.compile(
+                rf"({ticket_prefixes_pattern})-\d+"
             )
         else:
-            self.jira_pattern = None
+            self.ticket_pattern = None
 
         # Pattern to find noqa exclusion comments
         # Matches: noqa at end of line OR noqa with flake8 FIX codes (FIX001-FIX004)
@@ -179,11 +180,11 @@ class TodoChecker:
                             line_num = int(parts[1])
                             content = parts[2]
 
-                            # Check if this line has a Jira reference
-                            # If jira_pattern is None, ALL work comments are violations
+                            # Check if this line has a ticket reference
+                            # If ticket_pattern is None, ALL work comments are violations
                             if (
-                                self.jira_pattern is None
-                                or not self.jira_pattern.search(content)
+                                self.ticket_pattern is None
+                                or not self.ticket_pattern.search(content)
                             ):
                                 # Skip if line has noqa exclusion
                                 if not self.noqa_pattern.search(content):
@@ -193,9 +194,9 @@ class TodoChecker:
                                         (line_num, content.rstrip())
                                     )
 
-                            # Track current ticket TODOs (only if we have jira patterns)
+                            # Track current ticket TODOs (only if we have ticket patterns)
                             elif (
-                                self.jira_pattern is not None
+                                self.ticket_pattern is not None
                                 and self.current_ticket_id
                                 and self.current_ticket_id in content
                             ):
@@ -380,7 +381,7 @@ class TodoChecker:
 
     def check_file(self, file_path: str) -> List[Tuple[int, str]]:
         """
-        Check a single file for work comments without Jira references.
+        Check a single file for work comments without ticket references.
 
         Parameters
         ----------
@@ -403,17 +404,18 @@ class TodoChecker:
                 for line_num, line in enumerate(f, 1):
                     # Check if line contains a work comment
                     if self.comment_pattern.search(line):
-                        # Check if it also contains a Jira reference
-                        # If jira_pattern is None, ALL work comments are violations
-                        if self.jira_pattern is None or not self.jira_pattern.search(
-                            line
+                        # Check if it also contains a ticket reference
+                        # If ticket_pattern is None, ALL work comments are violations
+                        if (
+                            self.ticket_pattern is None
+                            or not self.ticket_pattern.search(line)
                         ):
                             # Skip if line has noqa exclusion
                             if not self.noqa_pattern.search(line):
                                 violations.append((line_num, line.rstrip()))
                         # If we have a current ticket, check if this TODO is for it  # noqa: FIX001
                         elif (
-                            self.jira_pattern is not None
+                            self.ticket_pattern is not None
                             and self.current_ticket_id
                             and self.current_ticket_id in line
                         ):
@@ -487,14 +489,14 @@ class TodoChecker:
 
         # Verbose mode: Show configuration at the beginning
         if self.verbose:
-            if self.jira_prefixes:
+            if self.ticket_prefixes:
                 print(
-                    f"🔍 Checking work comments for Jira references to projects {', '.join(self.jira_prefixes)}... "
+                    f"🔍 Checking work comments for ticket references to projects {', '.join(self.ticket_prefixes)}... "
                     f"Checking for: {', '.join(self.comment_prefixes)}"
                 )
             else:
                 print(
-                    f"🔍 Disallowing ALL work comments (no Jira prefix specified)... "
+                    f"🔍 Disallowing ALL work comments (no ticket prefix specified)... "
                     f"Checking for: {', '.join(self.comment_prefixes)}"
                 )
             if not file_paths:
@@ -578,10 +580,12 @@ class TodoChecker:
             # Show help text only if violations were found in staged files
             if self.exit_code == 1:
                 print("")
-                if self.jira_prefixes:
-                    print("💡 Please add Jira issue references to work comments like:")
+                if self.ticket_prefixes:
+                    print(
+                        "💡 Please add ticket/issue references to work comments like:"
+                    )
                     # Use first prefix for examples, but mention all are valid
-                    first_jira = self.jira_prefixes[0]
+                    first_ticket = self.ticket_prefixes[0]
 
                     # Generate examples based on the actual comment prefixes being checked
                     # Use up to 3 different comment prefixes for examples
@@ -597,20 +601,20 @@ class TodoChecker:
                             fmt = example_formats[i]
                             if len(fmt) == 3:  # Multi-line comment style
                                 print(
-                                    f"   {fmt[0]} {comment_prefix} {first_jira}-{123 + i}: {fmt[1]} {fmt[2]}"
+                                    f"   {fmt[0]} {comment_prefix} {first_ticket}-{123 + i}: {fmt[1]} {fmt[2]}"
                                 )
                             else:  # Single-line comment style
                                 print(
-                                    f"   {fmt[0]} {comment_prefix} {first_jira}-{123 + i}: {fmt[1]}"
+                                    f"   {fmt[0]} {comment_prefix} {first_ticket}-{123 + i}: {fmt[1]}"
                                 )
 
-                    if len(self.jira_prefixes) > 1:
-                        other_prefixes = ", ".join(self.jira_prefixes[1:])
+                    if len(self.ticket_prefixes) > 1:
+                        other_prefixes = ", ".join(self.ticket_prefixes[1:])
                         print(f"   (Also valid: {other_prefixes})")
                 else:
                     print("💡 Work comments (TODO, FIXME, etc.) are not allowed.")  # noqa: FIX001
                     print(
-                        "   Please remove them or specify a Jira prefix to allow tracked work items."
+                        "   Please remove them or specify a ticket prefix to allow tracked work items."
                     )
 
         # Return 0 if succeed_always is True, otherwise return the actual exit code
