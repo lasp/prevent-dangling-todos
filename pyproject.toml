@@ -1,7 +1,7 @@
 [project]
 name = "prevent_dangling_todos"
-version = "0.1.0"
-description = "Pre-commit hook for preventing commits with dangling TODO items that are not linked to a Jira ticket"
+version = "1.0.0"
+description = "Pre-commit hook for preventing commits with dangling TODO items without ticket references from any issue tracker"
 authors = [{ name = "Gavin Medley", email = "gavin.medley@lasp.colorado.edu" }]
 license = { text = "BSD-3" }
 readme = "README.md"

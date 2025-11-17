@@ -48,7 +48,7 @@ class TestCLI:
 
         assert exc_info.value.code == 0
         captured = capsys.readouterr()
-        assert "prevent-dangling-todos 0.1.0" in captured.out
+        assert "prevent-dangling-todos 1.0.0" in captured.out
 
     def test_no_arguments_checks_all_files(self, capsys):
         """Test that running without arguments checks all tracked files with no ticket prefix (disallow ALL TODOs)."""
