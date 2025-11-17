@@ -11,15 +11,8 @@ import os
 import subprocess
 from typing import List, Optional, Tuple, Union, Dict, Any
 
-try:
-    import yaml
-    from identify import identify
-
-    HAS_YAML = True
-    HAS_IDENTIFY = True
-except ImportError:
-    HAS_YAML = False
-    HAS_IDENTIFY = False
+import yaml
+from identify import identify
 
 
 class TodoChecker:
@@ -54,7 +47,7 @@ class TodoChecker:
     def __init__(
         self,
         jira_prefixes: Union[str, List[str]],
-        comment_prefixes: Optional[List[str]] = None,
+        comment_prefixes: List[str],
         quiet: bool = False,
         verbose: bool = False,
         succeed_always: bool = False,
@@ -68,8 +61,8 @@ class TodoChecker:
         ----------
         jira_prefixes : str or list of str
             The Jira project prefix(es) to look for (e.g., "MYJIRA" or ["MYJIRA", "PROJECT"])
-        comment_prefixes : list of str, optional
-            Comment prefixes to check (e.g., ["TODO", "FIXME"]). If None, uses default list.  # noqa: FIX001
+        comment_prefixes : list of str
+            Comment prefixes to check (e.g., ["TODO", "FIXME"])  # noqa: FIX001
         quiet : bool, optional
             If True, suppress all output and only return exit codes. Default is False.
         verbose : bool, optional
@@ -97,16 +90,7 @@ class TodoChecker:
         self.ticket_todos: list[tuple] = []  # Track TODOs for the current ticket
 
         # Comment prefixes that should require Jira references
-        if comment_prefixes is None:
-            # Default list matches flake8-fixme plugin (FIX001-FIX004)
-            self.comment_prefixes = [
-                "TODO",  # noqa: FIX001
-                "FIXME",  # noqa: FIX002
-                "XXX",  # noqa: FIX003
-                "HACK",  # noqa: FIX004
-            ]
-        else:
-            self.comment_prefixes = comment_prefixes
+        self.comment_prefixes = comment_prefixes
 
         # Build regex patterns
         self._build_patterns()
@@ -247,58 +231,8 @@ class TodoChecker:
 
             if result.returncode == 0:
                 files = result.stdout.strip().split("\n")
-                # Filter out empty strings, non-text files, and documentation/config files
-                filtered_files = []
-                for f in files:
-                    if not f:
-                        continue
-                    # Skip binary and image files
-                    if f.endswith(
-                        (
-                            ".png",
-                            ".jpg",
-                            ".jpeg",
-                            ".gif",
-                            ".pdf",
-                            ".ico",
-                            ".svg",
-                            ".lock",
-                            ".pyc",
-                        )
-                    ):
-                        continue
-                    # Skip documentation and config files that shouldn't have code TODOs
-                    if f.endswith(
-                        (
-                            "README.md",
-                            "CHANGELOG.md",
-                            "LICENSE",
-                            ".pre-commit-config.yaml",
-                            ".pre-commit-hooks.yaml",
-                        )
-                    ):
-                        continue
-                    # Skip various directories
-                    if f.startswith((".devcontainer/", "docs/", ".github/")):
-                        continue
-                    # Skip test files (they contain intentional violations for testing)
-                    if (
-                        f.startswith("tests/")
-                        or "/test_data/" in f
-                        or f.endswith("_test.py")
-                        or f.endswith("test_.py")
-                    ):
-                        continue
-                    # Skip package metadata files
-                    if f in [
-                        "pyproject.toml",
-                        "setup.py",
-                        "setup.cfg",
-                        "requirements.txt",
-                    ]:
-                        continue
-                    filtered_files.append(f)
-                return filtered_files
+                # Filter out only empty strings
+                return [f for f in files if f]
 
             return []
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
@@ -330,9 +264,6 @@ class TodoChecker:
             - types_or: list of file types to include (OR logic)
             - exclude_types: list of file types to exclude
         """
-        if not HAS_YAML:
-            return {}
-
         config_path = ".pre-commit-config.yaml"
         if not os.path.isfile(config_path):
             return {}
@@ -411,9 +342,7 @@ class TodoChecker:
                 pass  # Invalid regex, skip filtering
 
         # Apply type filters using identify library
-        if HAS_IDENTIFY and (
-            "types" in config or "types_or" in config or "exclude_types" in config
-        ):
+        if "types" in config or "types_or" in config or "exclude_types" in config:
             type_filtered = []
             for f in filtered:
                 if not os.path.isfile(f):

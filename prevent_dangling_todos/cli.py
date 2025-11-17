@@ -9,6 +9,9 @@ from typing import List, Optional, Tuple
 
 from prevent_dangling_todos.prevent_todos import TodoChecker
 
+# Default comment prefixes to check (matches flake8-fixme plugin FIX001-FIX004)
+DEFAULT_COMMENT_PREFIXES = ["TODO", "FIXME", "XXX", "HACK"]  # noqa: FIX001
+
 
 def create_parser() -> argparse.ArgumentParser:
     """
@@ -76,7 +79,7 @@ def create_parser() -> argparse.ArgumentParser:
         help=(
             "Comment prefix(es) to check. For multiple prefixes, separate with commas: "
             "'TODO,FIXME,XXX'. Can also be set via COMMENT_PREFIX environment variable. "  # noqa: FIX001
-            "Default: TODO, FIXME, XXX, HACK"  # noqa: FIX001
+            f"Default: {', '.join(DEFAULT_COMMENT_PREFIXES)}"
         ),
     )
 
@@ -230,9 +233,11 @@ def main(argv: Optional[List[str]] = None) -> None:
     cli_jira_prefixes = _parse_comma_separated(args.jira_prefix)
     cli_comment_prefixes = _parse_comma_separated(args.comment_prefix)
 
-    # Determine final values (CLI overrides env vars)
+    # Determine final values (CLI overrides env vars, with defaults)
     final_jira_prefixes = cli_jira_prefixes or env_jira_prefixes
-    final_comment_prefixes = cli_comment_prefixes or env_comment_prefixes
+    final_comment_prefixes = (
+        cli_comment_prefixes or env_comment_prefixes or DEFAULT_COMMENT_PREFIXES
+    )
     final_succeed_always = args.succeed_always
 
     # Note: jira_prefixes is now optional. If not provided, ALL work comments are disallowed.
