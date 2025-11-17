@@ -8,7 +8,8 @@ Usage: python prevent_todos.py file1.py file2.js ...
 import sys
 import re
 import os
-from typing import List, Optional, Tuple, Union
+import subprocess
+from typing import List, Optional, Tuple, Union, Dict
 
 
 class TodoChecker:
@@ -118,6 +119,163 @@ class TodoChecker:
         )
         self.jira_pattern = re.compile(rf"({jira_prefixes_pattern})-\d+")
 
+    def find_todos_with_grep(
+        self, file_paths: List[str]
+    ) -> Dict[str, List[Tuple[int, str]]]:
+        """
+        Use grep for efficient TODO detection across multiple files.
+
+        Parameters
+        ----------
+        file_paths : list of str
+            List of file paths to search
+
+        Returns
+        -------
+        dict
+            Dictionary mapping file paths to lists of (line_number, line_content) tuples
+        """
+        if not file_paths:
+            return {}
+
+        # Build grep pattern from comment prefixes
+        pattern = "\\|".join(self.comment_prefixes)
+
+        # Build the grep command
+        # Use -H for filename, -n for line numbers, -I to skip binary files
+        cmd = ["grep", "-Hn", "-I", f"\\b\\({pattern}\\)\\b"] + file_paths
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            # Parse grep output (format: filename:line_number:line_content)
+            todos_by_file: Dict[str, List[Tuple[int, str]]] = {}
+
+            if result.returncode == 0 and result.stdout:
+                for line in result.stdout.strip().split("\n"):
+                    if not line:
+                        continue
+
+                    # Split only on the first two colons to handle colons in the content
+                    parts = line.split(":", 2)
+                    if len(parts) >= 3:
+                        file_path = parts[0]
+                        try:
+                            line_num = int(parts[1])
+                            content = parts[2]
+
+                            # Check if this line has a Jira reference
+                            if not self.jira_pattern.search(content):
+                                if file_path not in todos_by_file:
+                                    todos_by_file[file_path] = []
+                                todos_by_file[file_path].append(
+                                    (line_num, content.rstrip())
+                                )
+
+                            # Track current ticket TODOs
+                            elif (
+                                self.current_ticket_id
+                                and self.current_ticket_id in content
+                            ):
+                                self.ticket_todos.append(
+                                    (file_path, line_num, content.rstrip())
+                                )
+                        except ValueError:
+                            # Skip malformed lines
+                            continue
+
+            return todos_by_file
+
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            # Fallback to file-by-file checking
+            return {}
+
+    def get_all_repo_files(self) -> List[str]:
+        """
+        Get all tracked files in the repository using git ls-files.
+
+        Returns
+        -------
+        list of str
+            List of file paths tracked by git
+        """
+        try:
+            result = subprocess.run(
+                ["git", "ls-files"],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            if result.returncode == 0:
+                files = result.stdout.strip().split("\n")
+                # Filter out empty strings, non-text files, and documentation/config files
+                filtered_files = []
+                for f in files:
+                    if not f:
+                        continue
+                    # Skip binary and image files
+                    if f.endswith(
+                        (
+                            ".png",
+                            ".jpg",
+                            ".jpeg",
+                            ".gif",
+                            ".pdf",
+                            ".ico",
+                            ".svg",
+                            ".lock",
+                            ".pyc",
+                        )
+                    ):
+                        continue
+                    # Skip documentation and config files that shouldn't have code TODOs
+                    if f.endswith(
+                        (
+                            "README.md",
+                            "CHANGELOG.md",
+                            "LICENSE",
+                            ".pre-commit-config.yaml",
+                            ".pre-commit-hooks.yaml",
+                        )
+                    ):
+                        continue
+                    # Skip various directories
+                    if f.startswith((".devcontainer/", "docs/", ".github/")):
+                        continue
+                    # Skip test files (they contain intentional violations for testing)
+                    if (
+                        f.startswith("tests/")
+                        or "/test_data/" in f
+                        or f.endswith("_test.py")
+                        or f.endswith("test_.py")
+                    ):
+                        continue
+                    # Skip package metadata files
+                    if f in [
+                        "pyproject.toml",
+                        "setup.py",
+                        "setup.cfg",
+                        "requirements.txt",
+                    ]:
+                        continue
+                    filtered_files.append(f)
+                return filtered_files
+
+            return []
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            if not self.quiet:
+                print(
+                    "⚠️  Warning: Unable to list repository files. Checking only provided files.",
+                    file=sys.stderr,
+                )
+            return []
+
     def check_file(self, file_path: str) -> List[Tuple[int, str]]:
         """
         Check a single file for work comments without Jira references.
@@ -148,28 +306,49 @@ class TodoChecker:
                             violations.append((line_num, line.rstrip()))
                         # If we have a current ticket, check if this TODO is for it
                         elif self.current_ticket_id and self.current_ticket_id in line:
-                            self.ticket_todos.append((file_path, line_num, line.rstrip()))
+                            self.ticket_todos.append(
+                                (file_path, line_num, line.rstrip())
+                            )
         except Exception as e:
             print(f"⚠️  Warning: Could not read {file_path}: {e}", file=sys.stderr)
 
         return violations
 
-    def check_files(self, file_paths: List[str]) -> int:
+    def check_files(self, file_paths: Optional[List[str]]) -> int:
         """
-        Check multiple files for violations.
+        Check files for violations. If no files provided, checks all tracked files in the repo.
 
         Parameters
         ----------
-        file_paths : list of str
-            List of file paths to check
+        file_paths : list of str or None
+            List of file paths to check (staged files). If None, checks all tracked files.
 
         Returns
         -------
         int
-            Exit code (0 if no violations, 1 if violations found)
+            Exit code (0 if no violations in staged files, 1 if violations found in staged files)
         """
-        # Collect all violations and file statuses for verbose mode
-        all_violations = []
+        # Determine which files are staged and which are all repo files
+        staged_files = file_paths if file_paths else []
+        all_repo_files = []
+
+        # If no files were provided, or if we always want to check all files
+        # Get all files in the repository for warning purposes
+        if not file_paths:
+            all_repo_files = self.get_all_repo_files()
+            files_to_check = all_repo_files
+        else:
+            # We have staged files, but also get all repo files for comprehensive checking
+            all_repo_files = self.get_all_repo_files()
+            files_to_check = file_paths  # Check provided files first
+
+            # Add any repo files not in the staged list for warning-only checks
+            unstaged_files = [f for f in all_repo_files if f not in staged_files]
+            files_to_check = staged_files + unstaged_files
+
+        # Track violations separately for staged vs unstaged
+        staged_violations = []
+        unstaged_violations = []
         file_statuses = []
 
         # Verbose mode: Show configuration at the beginning
@@ -178,39 +357,85 @@ class TodoChecker:
                 f"🔍 Checking work comments for Jira references to projects {', '.join(self.jira_prefixes)}... "
                 f"Checking for: {', '.join(self.comment_prefixes)}"
             )
+            if not file_paths:
+                print(
+                    "📁 No specific files provided, checking all tracked files in repository"
+                )
 
-        # Check each file
-        for file_path in file_paths:
-            violations = self.check_file(file_path)
-            
-            if violations:
-                all_violations.append((file_path, violations))
-                file_statuses.append((file_path, False))  # False = has violations
-                self.exit_code = 1
+        # Try to use grep for batch processing (much faster for many files)
+        grep_results = {}
+        if len(files_to_check) > 3:  # Use grep for 4+ files for efficiency
+            grep_results = self.find_todos_with_grep(files_to_check)
+
+        # Check each file (use grep results if available, otherwise fall back to file-by-file)
+        for file_path in files_to_check:
+            is_staged = file_path in staged_files
+
+            # Use grep results if available, otherwise check individual file
+            if file_path in grep_results:
+                violations = grep_results[file_path]
             else:
-                file_statuses.append((file_path, True))   # True = clean
+                violations = self.check_file(file_path)
 
-        # Output violations based on mode
-        for file_path, violations in all_violations:
-            if not self.quiet:  # Both standard and verbose modes show violations
+            if violations:
+                if is_staged:
+                    staged_violations.append((file_path, violations))
+                    file_statuses.append(
+                        (file_path, False, True)
+                    )  # has violations, is staged
+                    self.exit_code = 1  # Only fail for staged files
+                else:
+                    unstaged_violations.append((file_path, violations))
+                    file_statuses.append(
+                        (file_path, False, False)
+                    )  # has violations, not staged
+            else:
+                file_statuses.append(
+                    (file_path, True, is_staged)
+                )  # clean, staged status
+
+        # Output staged violations as errors (blocking)
+        for file_path, violations in staged_violations:
+            if not self.quiet:
                 for line_num, line_content in violations:
-                    print(f"❌ {file_path}:{line_num}: {line_content}")
+                    print(f"❌ ERROR: {file_path}:{line_num}: {line_content}")
 
-        # Show ticket-specific TODOs with yellow warning (not in quiet mode)
+        # Output unstaged violations as warnings (non-blocking)
+        if unstaged_violations and not self.quiet:
+            if staged_violations:
+                print("")  # Blank line between errors and warnings
+            print("⚠️  WARNING: Dangling TODOs found in unstaged files (non-blocking):")
+            for file_path, violations in unstaged_violations:
+                for line_num, line_content in violations:
+                    print(f"⚠️  {file_path}:{line_num}: {line_content}")
+
+        # Show ticket-specific TODOs with warning symbol (not in quiet mode)
         if self.ticket_todos and not self.quiet:
             print("")  # Blank line before ticket TODOs
-            print(f"⚠️  Unresolved TODOs for current branch ticket {self.current_ticket_id}:")
+            print(
+                f"⚠️  Unresolved TODOs for current branch ticket {self.current_ticket_id}:"
+            )
             for file_path, line_num, line_content in self.ticket_todos:
-                print(f"⚠️  {file_path}:{line_num}: {line_content}")
+                # Indicate if it's in a staged file
+                staged_indicator = " [STAGED]" if file_path in staged_files else ""
+                print(f"⚠️  {file_path}:{line_num}: {line_content}{staged_indicator}")
 
         # Verbose mode: Show file status summary and help text
         if self.verbose:
             print("")  # Blank line before summary
-            for file_path, is_clean in file_statuses:
-                status_icon = "✅" if is_clean else "❌"
-                print(f"{status_icon} {file_path}")
+            for file_info in file_statuses:
+                if len(file_info) == 3:
+                    file_path, is_clean, is_staged = file_info
+                    status_icon = "✅" if is_clean else "❌"
+                    staged_text = " (staged)" if is_staged else " (unstaged)"
+                    print(f"{status_icon} {file_path}{staged_text}")
+                else:
+                    # Fallback for old format
+                    file_path, is_clean = file_info
+                    status_icon = "✅" if is_clean else "❌"
+                    print(f"{status_icon} {file_path}")
 
-            # Show help text only if violations were found
+            # Show help text only if violations were found in staged files
             if self.exit_code == 1:
                 print("")
                 print("💡 Please add Jira issue references to work comments like:")

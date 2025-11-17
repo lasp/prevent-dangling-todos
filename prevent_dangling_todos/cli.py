@@ -48,12 +48,13 @@ def create_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
-    # Positional argument for files
+    # Positional argument for files (now optional)
     parser.add_argument(
         "files",
-        nargs="+",
+        nargs="*",
+        default=None,
         metavar="FILE",
-        help="Source files to check for dangling work comments",
+        help="Source files to check for dangling work comments. If not provided, checks all tracked files in the repository.",
     )
 
     # Optional arguments
@@ -266,7 +267,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     elif branch_name:
         current_ticket_id = _extract_ticket_id(branch_name, final_jira_prefixes)
         if not current_ticket_id:
-            branch_detection_msg = f"Note: No ticket ID detected in current branch '{branch_name}'"
+            branch_detection_msg = (
+                f"Note: No ticket ID detected in current branch '{branch_name}'"
+            )
 
     # Initialize checker with configuration
     checker = TodoChecker(
@@ -279,7 +282,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     )
 
     # Check files and exit with appropriate code
-    exit_code = checker.check_files(args.files)
+    # If no files provided, checker will check all tracked files in repo
+    exit_code = checker.check_files(args.files if args.files else None)
 
     # Show branch detection message if needed (not in quiet mode)
     if branch_detection_msg and not args.quiet:

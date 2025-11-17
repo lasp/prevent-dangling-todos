@@ -1,0 +1,35 @@
+repos:
+  # # Local hook for prevent-dangling-todos (this repository)
+  # - repo: local
+  #   hooks:
+  #     - id: prevent-dangling-todos
+  #       name: prevent-dangling-todos
+  #       entry: prevent-dangling-todos
+  #       language: python
+  #       types: [text]
+  #       args: ["-j", "MYJIRA"]  # Replace MYJIRA with your Jira project prefix(es)
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+
+  # Ruff - Python linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.7.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # MyPy - Type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.13.0
+    hooks:
+      - id: mypy
+        additional_dependencies: []
+        args: [--ignore-missing-imports]
