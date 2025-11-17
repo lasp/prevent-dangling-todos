@@ -49,15 +49,24 @@ class TestCLI:
         captured = capsys.readouterr()
         assert "prevent-dangling-todos 0.1.0" in captured.out
 
-    def test_no_arguments_shows_error(self, capsys):
-        """Test that running without arguments shows an error about missing Jira prefix."""
-        with pytest.raises(SystemExit) as exc_info:
-            main([])
+    def test_no_arguments_checks_all_files(self, capsys):
+        """Test that running without arguments checks all tracked files with no jira prefix (disallow ALL TODOs)."""
+        # Mock git ls-files to return test files
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = "file1.py\nfile2.js"
+            mock_run.return_value = mock_result
 
-        assert exc_info.value.code == 2
-        captured = capsys.readouterr()
-        # Now the error is about missing Jira prefix since files are optional
-        assert "Error: Jira project prefix(es) must be specified" in captured.err
+            with pytest.raises(SystemExit) as exc_info:
+                main([])
+
+            # Should run successfully (no jira prefix means disallow all TODOs)
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Should show informational message about no jira prefix
+            assert "No Jira prefix specified" in captured.out
+            assert "ALL work comments" in captured.out
 
     def test_clean_file_passes(self, capsys):
         """Test that a file with properly referenced TODOs passes with no output."""
@@ -246,17 +255,58 @@ class TestCLI:
             # Should show git detection failure note
             assert "Note: Unable to detect current git branch" in captured.out
 
-    def test_no_jira_prefix_error(self, capsys):
-        """Test error when no Jira prefix provided via CLI or env var."""
-        test_file = str(self.test_data_dir / "test_file_clean.py")
+    def test_no_jira_prefix_disallows_all_todos(self, capsys):
+        """Test that no Jira prefix disallows ALL work comments."""
+        test_file = str(self.test_data_dir / "test_file_with_violations.py")
 
         with pytest.raises(SystemExit) as exc_info:
             main([test_file])
 
-        assert exc_info.value.code == 2
+        # Should fail because ALL TODOs are violations when no jira prefix
+        assert exc_info.value.code == 1
         captured = capsys.readouterr()
-        assert "Error: Jira project prefix(es) must be specified" in captured.err
-        assert "Examples:" in captured.err
+        # Should show informational message about no jira prefix
+        assert "No Jira prefix specified" in captured.out
+        assert "ALL work comments" in captured.out
+        # Should show violations
+        assert "❌" in captured.out
+
+    def test_no_jira_prefix_clean_file(self, capsys):
+        """Test that no Jira prefix with clean file (no TODOs) passes."""
+        # Create a temporary file with no TODOs
+        test_file = str(self.test_data_dir / "test_file_no_todos.py")
+
+        # Mock git ls-files to return only the test file
+        with patch("subprocess.run") as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 0
+            mock_result.stdout = test_file
+            mock_run.return_value = mock_result
+
+            with pytest.raises(SystemExit) as exc_info:
+                main([test_file])
+
+            # Should pass because file has no TODOs
+            assert exc_info.value.code == 0
+            captured = capsys.readouterr()
+            # Should show informational message about no jira prefix
+            assert "No Jira prefix specified" in captured.out
+
+    def test_no_jira_prefix_with_valid_jira_references(self, capsys):
+        """Test that even valid Jira references are violations when no jira prefix is specified."""
+        test_file = str(
+            self.test_data_dir / "test_file_clean.py"
+        )  # Has MYJIRA-123 references
+
+        with pytest.raises(SystemExit) as exc_info:
+            main([test_file])
+
+        # Should fail because ALL TODOs are violations when no jira prefix
+        # (even though they have MYJIRA-123 references)
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "❌" in captured.out
+        assert "No Jira prefix specified" in captured.out
 
     def test_succeed_always_cli_option(self, capsys):
         """Test --succeed-always CLI option works correctly."""
@@ -449,6 +499,50 @@ class TestCLI:
         assert "--verbose" in captured.out
         assert "Verbose mode" in captured.out
 
+    def test_help_includes_check_unstaged(self, capsys):
+        """Test that --help includes information about --check-unstaged."""
+        parser = create_parser()
+
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["--help"])
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+
+        # Check for check-unstaged option in help text
+        assert "--check-unstaged" in captured.out
+        assert "-u" in captured.out
+        assert "unstaged files" in captured.out
+
+    def test_check_unstaged_short_flag(self, capsys):
+        """Test that -u short flag works for --check-unstaged."""
+        test_file = str(self.test_data_dir / "test_file_with_violations.py")
+
+        # Mock git ls-files to return unstaged files
+        with patch("subprocess.run") as mock_run:
+
+            def side_effect(cmd, **kwargs):
+                mock_result = MagicMock()
+                if "rev-parse" in cmd:
+                    mock_result.returncode = 1  # No git branch
+                elif "ls-files" in cmd:
+                    mock_result.returncode = 0
+                    mock_result.stdout = "other.py"
+                else:
+                    mock_result.returncode = 0
+                    mock_result.stdout = ""
+                return mock_result
+
+            mock_run.side_effect = side_effect
+
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", "-u", test_file])
+
+            # Should fail because test file has violations
+            assert exc_info.value.code == 1
+            captured = capsys.readouterr()
+            assert "❌" in captured.out
+
 
 class TestBranchDetection:
     """Test git branch detection and ticket ID extraction."""
@@ -620,7 +714,7 @@ class TestBranchDetection:
             assert exc_info.value.code == 0
 
     def test_no_files_with_verbose(self, capsys):
-        """Test verbose output when no files are provided."""
+        """Test verbose output when no files are provided and --check-unstaged is set."""
         # Mock git ls-files
         mock_result = MagicMock()
         mock_result.returncode = 0
@@ -628,7 +722,7 @@ class TestBranchDetection:
 
         with patch("subprocess.run", return_value=mock_result):
             with pytest.raises(SystemExit) as exc_info:
-                main(["-j", "MYJIRA", "--verbose"])
+                main(["-j", "MYJIRA", "--verbose", "--check-unstaged"])
 
             assert exc_info.value.code == 0
             captured = capsys.readouterr()
@@ -639,38 +733,58 @@ class TestBranchDetection:
                 or "checking all tracked files" in captured.out
             )
 
+    def test_no_files_no_check_unstaged_warning(self, capsys):
+        """Test that warning is shown when no files are provided and --check-unstaged is not set."""
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-j", "MYJIRA"])
+
+        assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+
+        # Should show warning about nothing to check
+        assert "No files provided" in captured.out
+        assert "--check-unstaged" in captured.out
+        assert "Nothing to check" in captured.out
+
     def test_staged_vs_unstaged_differentiation(self, capsys, tmp_path):
-        """Test that staged files produce errors while unstaged produce warnings."""
+        """Test that staged files produce errors while unstaged produce warnings when --check-unstaged is set."""
         # Create test files
         staged_file = tmp_path / "staged.py"
         staged_file.write_text("# TODO: Missing reference in staged file\n")
 
+        unstaged_file = tmp_path / "unstaged.py"
+        unstaged_file.write_text("# TODO: Missing in unstaged\n")
+
         # Mock git ls-files to return additional unstaged files
         mock_result = MagicMock()
         mock_result.returncode = 0
-        mock_result.stdout = f"{staged_file}\nother_file.py"
+        mock_result.stdout = f"{staged_file}\n{unstaged_file}"
 
         with patch("subprocess.run", return_value=mock_result):
-            with patch("os.path.isfile", return_value=True):
-                with patch(
-                    "builtins.open",
-                    side_effect=[
-                        # For the staged file check
-                        staged_file.open("r"),
-                        # For the unstaged file check (mock content)
-                        MagicMock(
-                            __enter__=lambda s: iter(["# TODO: Missing in unstaged\n"]),
-                            __exit__=lambda s, *_: None,
-                        ),
-                    ],
-                ):
-                    with pytest.raises(SystemExit) as exc_info:
-                        main(["-j", "MYJIRA", str(staged_file)])
+            with pytest.raises(SystemExit) as exc_info:
+                main(["-j", "MYJIRA", "--check-unstaged", str(staged_file)])
 
-                    # Should fail because staged file has violations
-                    assert exc_info.value.code == 1
-                    captured = capsys.readouterr()
+            # Should fail because staged file has violations
+            assert exc_info.value.code == 1
+            captured = capsys.readouterr()
 
-                    # Check for proper formatting
-                    assert "ERROR:" in captured.out
-                    assert "WARNING:" in captured.out
+            # Check for proper formatting
+            assert "ERROR:" in captured.out
+            assert "WARNING:" in captured.out
+
+    def test_no_check_unstaged_skips_unstaged_files(self, capsys, tmp_path):
+        """Test that without --check-unstaged, only staged files are checked."""
+        # Create test files
+        staged_file = tmp_path / "staged.py"
+        staged_file.write_text("# TODO: Missing reference in staged file\n")
+
+        with pytest.raises(SystemExit) as exc_info:
+            main(["-j", "MYJIRA", str(staged_file)])
+
+        # Should fail because staged file has violations
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+
+        # Should only show ERROR for staged file, no WARNING for unstaged
+        assert "ERROR:" in captured.out
+        assert "WARNING: Dangling TODOs found in unstaged" not in captured.out

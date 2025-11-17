@@ -65,7 +65,7 @@ def create_parser() -> argparse.ArgumentParser:
         help=(
             "Jira project prefix(es) to look for. For multiple prefixes, separate with commas: "
             "'MYJIRA,PROJECT,TEAM'. Can also be set via JIRA_PREFIX environment variable. "
-            "Required if JIRA_PREFIX environment variable is not set."
+            "If not specified, ALL work comments (TODO, FIXME, etc.) will be disallowed."
         ),
     )
 
@@ -100,6 +100,16 @@ def create_parser() -> argparse.ArgumentParser:
         help=(
             "Always exit with code 0, even when dangling TODOs are found. "
             "Useful for alerting developers without blocking commits."
+        ),
+    )
+
+    parser.add_argument(
+        "-u",
+        "--check-unstaged",
+        action="store_true",
+        help=(
+            "Also check unstaged files for dangling work comments (as warnings). "
+            "By default, only staged files passed to the hook are checked."
         ),
     )
 
@@ -223,24 +233,11 @@ def main(argv: Optional[List[str]] = None) -> None:
     final_comment_prefixes = cli_comment_prefixes or env_comment_prefixes
     final_succeed_always = args.succeed_always
 
-    # Validate that jira_prefixes are provided from some source
-    if not final_jira_prefixes:
+    # Note: jira_prefixes is now optional. If not provided, ALL work comments are disallowed.
+    if not final_jira_prefixes and not args.quiet:
         print(
-            "Error: Jira project prefix(es) must be specified either via --jira-prefix argument "
-            "or JIRA_PREFIX environment variable.",
-            file=sys.stderr,
+            "Note: No Jira prefix specified. ALL work comments (TODO, FIXME, etc.) will be disallowed."
         )
-        print("\nExamples:", file=sys.stderr)
-        print("  prevent-dangling-todos --jira-prefix MYJIRA file.py", file=sys.stderr)
-        print(
-            "  prevent-dangling-todos --jira-prefix MYJIRA,PROJECT file.py",
-            file=sys.stderr,
-        )
-        print(
-            "  JIRA_PREFIX=MYJIRA,PROJECT prevent-dangling-todos file.py",
-            file=sys.stderr,
-        )
-        sys.exit(2)
 
     # Configuration validation for conflicting options
     if args.quiet and args.verbose:
@@ -264,7 +261,7 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     if branch_error:
         branch_detection_msg = f"Note: {branch_error}"
-    elif branch_name:
+    elif branch_name and final_jira_prefixes:
         current_ticket_id = _extract_ticket_id(branch_name, final_jira_prefixes)
         if not current_ticket_id:
             branch_detection_msg = (
@@ -272,13 +269,15 @@ def main(argv: Optional[List[str]] = None) -> None:
             )
 
     # Initialize checker with configuration
+    # Pass empty list if no jira prefixes (will disallow ALL work comments)
     checker = TodoChecker(
-        jira_prefixes=final_jira_prefixes,
+        jira_prefixes=final_jira_prefixes if final_jira_prefixes else [],
         quiet=args.quiet,
         verbose=args.verbose,
         comment_prefixes=final_comment_prefixes,
         succeed_always=final_succeed_always,
         current_ticket_id=current_ticket_id,
+        check_unstaged=args.check_unstaged,
     )
 
     # Check files and exit with appropriate code
