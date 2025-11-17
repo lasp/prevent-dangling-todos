@@ -25,28 +25,30 @@ def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="prevent-dangling-todos",
         description=(
-            "Check source files for TODO/FIXME comments without Jira issue references.\n\n"  # noqa: FIX001
+            "Check source files for TODO/FIXME comments without ticket references.\n\n"  # noqa: FIX001
             "This tool helps maintain code quality by ensuring all work comments "
-            "(TODO, FIXME, etc.) are properly linked to tracking issues.\n\n"  # noqa: FIX001
+            "(TODO, FIXME, etc.) are properly linked to issue trackers (Jira, GitHub, Linear, etc.).\n\n"  # noqa: FIX001
             "Configuration can be provided via command line arguments or environment variables:\n"
-            "  JIRA_PREFIX=PREFIX1,PREFIX2,PREFIX3\n"
+            "  TICKET_PREFIX=PREFIX1,PREFIX2,PREFIX3  (or JIRA_PREFIX for backward compat)\n"
             "  COMMENT_PREFIX=TODO,FIXME,XXX\n\n"  # noqa: FIX001
             "Command line arguments take precedence over environment variables."
         ),
         epilog=(
             "Examples:\n"
-            "  %(prog)s -j MYJIRA file1.py file2.js\n"
-            "      Check specific files for dangling TODOs\n\n"
-            "  %(prog)s --jira-prefix MYJIRA,PROJECT,TEAM file.py\n"
-            "      Use multiple Jira project prefixes (comma-separated)\n\n"
-            "  %(prog)s -j PROJECT src/**/*.py\n"
-            "      Check all Python files with PROJECT prefix\n\n"
-            "  %(prog)s -j MYJIRA -c TODO,FIXME *.js\n"  # noqa: FIX001
+            "  %(prog)s -t MYJIRA file1.py file2.js\n"
+            "      Check specific files for dangling TODOs (Jira example)\n\n"
+            "  %(prog)s -t GITHUB src/**/*.py\n"
+            "      Check all Python files with GitHub issue prefix\n\n"
+            "  %(prog)s --ticket-prefix MYJIRA,GITHUB,LINEAR file.py\n"
+            "      Use multiple ticket prefixes (comma-separated)\n\n"
+            "  %(prog)s -t MYJIRA -c TODO,FIXME *.js\n"  # noqa: FIX001
             "      Check only TODO and FIXME comments\n\n"  # noqa: FIX001
-            "  JIRA_PREFIX=MYJIRA,PROJECT %(prog)s file.py\n"
-            "      Use environment variable for Jira prefixes\n\n"
-            "  COMMENT_PREFIX=TODO,FIXME %(prog)s -j MYJIRA file.py\n"  # noqa: FIX001
-            "      Environment variable for comment prefixes, CLI for Jira\n\n"
+            "  TICKET_PREFIX=MYJIRA,PROJECT %(prog)s file.py\n"
+            "      Use environment variable for ticket prefixes\n\n"
+            "  COMMENT_PREFIX=TODO,FIXME %(prog)s -t MYJIRA file.py\n"  # noqa: FIX001
+            "      Environment variable for comment prefixes, CLI for ticket prefix\n\n"
+            "  %(prog)s -j MYJIRA file.py\n"
+            "      [DEPRECATED] Use -t instead of -j\n\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -62,13 +64,24 @@ def create_parser() -> argparse.ArgumentParser:
 
     # Optional arguments
     parser.add_argument(
+        "-t",
+        "--ticket-prefix",
+        metavar="PREFIXES",
+        help=(
+            "Ticket prefix(es) to look for from any issue tracker (Jira, GitHub, Linear, etc.). "
+            "For multiple prefixes, separate with commas: 'MYJIRA,GITHUB,LINEAR'. "
+            "Can also be set via TICKET_PREFIX environment variable. "
+            "If not specified, ALL work comments (TODO, FIXME, etc.) will be disallowed."  # noqa: FIX001
+        ),
+    )
+
+    parser.add_argument(
         "-j",
         "--jira-prefix",
         metavar="PREFIXES",
         help=(
-            "Jira project prefix(es) to look for. For multiple prefixes, separate with commas: "
-            "'MYJIRA,PROJECT,TEAM'. Can also be set via JIRA_PREFIX environment variable. "
-            "If not specified, ALL work comments (TODO, FIXME, etc.) will be disallowed."  # noqa: FIX001
+            "[DEPRECATED: Use -t/--ticket-prefix instead] "
+            "Ticket prefix(es) to look for. Can also be set via JIRA_PREFIX environment variable."
         ),
     )
 
@@ -177,29 +190,29 @@ def _get_current_git_branch() -> Tuple[Optional[str], Optional[str]]:
 
 
 def _extract_ticket_id(
-    branch_name: str, jira_prefixes: List[str] | None
+    branch_name: str, ticket_prefixes: List[str] | None
 ) -> Optional[str]:
     """
-    Extract a ticket ID from a branch name if it matches any of the Jira prefixes.
+    Extract a ticket ID from a branch name if it matches any of the ticket prefixes.
 
     Parameters
     ----------
     branch_name : str
         The git branch name
-    jira_prefixes : list[str] | None
-        List of valid Jira project prefixes
+    ticket_prefixes : list[str] | None
+        List of valid ticket/issue prefixes (e.g., JIRA, GITHUB, LINEAR)
 
     Returns
     -------
     str or None
-        The ticket ID (e.g., "LIBSDC-123") if found, otherwise None
+        The ticket ID (e.g., "LIBSDC-123", "GITHUB-456") if found, otherwise None
     """
-    if not branch_name or not jira_prefixes:
+    if not branch_name or not ticket_prefixes:
         return None
 
-    # Build a pattern to match any of the Jira prefixes followed by a dash and numbers
-    # This will match patterns like LIBSDC-123 anywhere in the branch name
-    for prefix in jira_prefixes:
+    # Build a pattern to match any of the ticket prefixes followed by a dash and numbers
+    # This will match patterns like LIBSDC-123, GITHUB-456 anywhere in the branch name
+    for prefix in ticket_prefixes:
         pattern = rf"{re.escape(prefix)}-\d+"
         match = re.search(pattern, branch_name)
         if match:
@@ -225,25 +238,47 @@ def main(argv: Optional[List[str]] = None) -> None:
     else:
         args = parser.parse_args(argv)
 
-    # Parse environment variables
-    env_jira_prefixes = _parse_comma_separated(os.environ.get("JIRA_PREFIX"))
+    # Parse environment variables (new + deprecated)
+    env_ticket_prefixes = _parse_comma_separated(os.environ.get("TICKET_PREFIX"))
+    env_jira_prefixes = _parse_comma_separated(
+        os.environ.get("JIRA_PREFIX")
+    )  # Deprecated
     env_comment_prefixes = _parse_comma_separated(os.environ.get("COMMENT_PREFIX"))
 
-    # Parse CLI arguments
-    cli_jira_prefixes = _parse_comma_separated(args.jira_prefix)
+    # Parse CLI arguments (new + deprecated)
+    cli_ticket_prefixes = _parse_comma_separated(args.ticket_prefix)
+    cli_jira_prefixes = _parse_comma_separated(args.jira_prefix)  # Deprecated
     cli_comment_prefixes = _parse_comma_separated(args.comment_prefix)
 
-    # Determine final values (CLI overrides env vars, with defaults)
-    final_jira_prefixes = cli_jira_prefixes or env_jira_prefixes
+    # Show deprecation warnings
+    if cli_jira_prefixes and not args.quiet:
+        print(
+            "Warning: -j/--jira-prefix is deprecated. Use -t/--ticket-prefix instead.",
+            file=sys.stderr,
+        )
+    if env_jira_prefixes and not env_ticket_prefixes and not args.quiet:
+        print(
+            "Warning: JIRA_PREFIX environment variable is deprecated. Use TICKET_PREFIX instead.",
+            file=sys.stderr,
+        )
+
+    # Determine final values with proper precedence
+    # Priority: --ticket-prefix > --jira-prefix > TICKET_PREFIX > JIRA_PREFIX
+    final_ticket_prefixes = (
+        cli_ticket_prefixes
+        or cli_jira_prefixes
+        or env_ticket_prefixes
+        or env_jira_prefixes
+    )
     final_comment_prefixes = (
         cli_comment_prefixes or env_comment_prefixes or DEFAULT_COMMENT_PREFIXES
     )
     final_succeed_always = args.succeed_always
 
-    # Note: jira_prefixes is now optional. If not provided, ALL work comments are disallowed.
-    if not final_jira_prefixes and not args.quiet:
+    # Note: ticket_prefixes is now optional. If not provided, ALL work comments are disallowed.
+    if not final_ticket_prefixes and not args.quiet:
         print(
-            "Note: No Jira prefix specified. ALL work comments (TODO, FIXME, etc.) will be disallowed."  # noqa: FIX001
+            "Note: No ticket prefix specified. ALL work comments (TODO, FIXME, etc.) will be disallowed."  # noqa: FIX001
         )
 
     # Configuration validation for conflicting options
@@ -268,17 +303,17 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     if branch_error:
         branch_detection_msg = f"Note: {branch_error}"
-    elif branch_name and final_jira_prefixes:
-        current_ticket_id = _extract_ticket_id(branch_name, final_jira_prefixes)
+    elif branch_name and final_ticket_prefixes:
+        current_ticket_id = _extract_ticket_id(branch_name, final_ticket_prefixes)
         if not current_ticket_id:
             branch_detection_msg = (
                 f"Note: No ticket ID detected in current branch '{branch_name}'"
             )
 
     # Initialize checker with configuration
-    # Pass empty list if no jira prefixes (will disallow ALL work comments)
+    # Pass empty list if no ticket prefixes (will disallow ALL work comments)
     checker = TodoChecker(
-        jira_prefixes=final_jira_prefixes if final_jira_prefixes else [],
+        ticket_prefixes=final_ticket_prefixes if final_ticket_prefixes else [],
         quiet=args.quiet,
         verbose=args.verbose,
         comment_prefixes=final_comment_prefixes,

@@ -8,7 +8,8 @@ repos:
         language: python
         types: [text]
         args: ["--check-unstaged", "--comment-prefix=TODO"]
-        exclude: '^\.pre-commit-config\.yaml$|^tests/.*$'
+        files: '.*\.py'
+        exclude: '^tests/.*$'
         always_run: true
 
   # Standard pre-commit hooks

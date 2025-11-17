@@ -15,12 +15,12 @@ class TestTodoChecker:
     def checker(self):
         """Create a TodoChecker instance."""
         return TodoChecker(
-            jira_prefixes="MYJIRA", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="MYJIRA", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
 
     def test_initialization(self, checker):
         """Test TodoChecker initialization."""
-        assert checker.jira_prefixes == ["MYJIRA"]
+        assert checker.ticket_prefixes == ["MYJIRA"]
         assert checker.quiet is False
         assert checker.exit_code == 0
         assert "TODO" in checker.comment_prefixes
@@ -39,21 +39,21 @@ class TestTodoChecker:
         assert not checker.comment_pattern.search("ToDo: mixed case")
 
         # Test JIRA pattern matching with case sensitivity
-        assert checker.jira_pattern.search("MYJIRA-123")
-        assert not checker.jira_pattern.search("myjira-456")
-        assert not checker.jira_pattern.search("MyJira-789")
+        assert checker.ticket_pattern.search("MYJIRA-123")
+        assert not checker.ticket_pattern.search("myjira-456")
+        assert not checker.ticket_pattern.search("MyJira-789")
 
         # Test pattern specificity - should not match other prefixes
-        assert not checker.jira_pattern.search("PROJECT-123")
-        assert not checker.jira_pattern.search("WRONG-123")
+        assert not checker.ticket_pattern.search("PROJECT-123")
+        assert not checker.ticket_pattern.search("WRONG-123")
 
         # Test with custom checker for different prefix
         custom_checker = TodoChecker(
-            jira_prefixes="PROJECT", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="PROJECT", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
-        assert custom_checker.jira_pattern.search("PROJECT-123")
-        assert not custom_checker.jira_pattern.search("project-456")
-        assert not custom_checker.jira_pattern.search("MYJIRA-123")
+        assert custom_checker.ticket_pattern.search("PROJECT-123")
+        assert not custom_checker.ticket_pattern.search("project-456")
+        assert not custom_checker.ticket_pattern.search("MYJIRA-123")
 
     def test_file_checking(self, checker, clean_test_file, violation_test_file):
         """Test comprehensive file checking functionality."""
@@ -111,7 +111,9 @@ class TestTodoChecker:
 
     def test_custom_comment_prefixes(self):
         """Test TodoChecker with custom comment prefixes."""
-        checker = TodoChecker(jira_prefixes="TEST", comment_prefixes=["TODO", "CUSTOM"])
+        checker = TodoChecker(
+            ticket_prefixes="TEST", comment_prefixes=["TODO", "CUSTOM"]
+        )
 
         # Should match custom prefixes
         assert checker.comment_pattern.search("TODO: test")
@@ -127,7 +129,7 @@ class TestTodoChecker:
         """Test output differences between quiet and standard modes."""
         # Test 1: Quiet mode with violations - should have no output
         quiet_checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             quiet=True,
         )
@@ -148,7 +150,7 @@ class TestTodoChecker:
 
         # Test 3: Standard mode with violations - only show violations with red X
         standard_checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             quiet=False,
         )
@@ -173,32 +175,32 @@ class TestTodoChecker:
         """Test comprehensive multiple JIRA prefix functionality."""
         # Test 1: Initialization with multiple prefixes
         checker = TodoChecker(
-            jira_prefixes=["MYJIRA", "PROJECT", "TEAM"],
+            ticket_prefixes=["MYJIRA", "PROJECT", "TEAM"],
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
         )
-        assert checker.jira_prefixes == ["MYJIRA", "PROJECT", "TEAM"]
+        assert checker.ticket_prefixes == ["MYJIRA", "PROJECT", "TEAM"]
 
         # Test with string input (backward compatibility)
         single_checker = TodoChecker(
-            jira_prefixes="SINGLE", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="SINGLE", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
-        assert single_checker.jira_prefixes == ["SINGLE"]
+        assert single_checker.ticket_prefixes == ["SINGLE"]
 
         # Test 2: Pattern matching with multiple prefixes
         multi_checker = TodoChecker(
-            jira_prefixes=["ALPHA", "BETA", "GAMMA"],
+            ticket_prefixes=["ALPHA", "BETA", "GAMMA"],
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
         )
 
         # Should match any of the prefixes (case sensitive)
-        assert multi_checker.jira_pattern.search("ALPHA-123")
-        assert multi_checker.jira_pattern.search("BETA-456")
-        assert multi_checker.jira_pattern.search("GAMMA-789")
-        assert not multi_checker.jira_pattern.search("alpha-123")  # Case sensitive
+        assert multi_checker.ticket_pattern.search("ALPHA-123")
+        assert multi_checker.ticket_pattern.search("BETA-456")
+        assert multi_checker.ticket_pattern.search("GAMMA-789")
+        assert not multi_checker.ticket_pattern.search("alpha-123")  # Case sensitive
 
         # Should not match other prefixes
-        assert not multi_checker.jira_pattern.search("DELTA-123")
-        assert not multi_checker.jira_pattern.search("MYJIRA-456")
+        assert not multi_checker.ticket_pattern.search("DELTA-123")
+        assert not multi_checker.ticket_pattern.search("MYJIRA-456")
 
         # Test 3: File checking with multiple prefixes
         # Clean file with MYJIRA references should pass
@@ -236,13 +238,13 @@ class TestTodoChecker:
         """Test TodoChecker initialization with succeed_always parameter."""
         # Test default behavior (succeed_always=False)
         checker = TodoChecker(
-            jira_prefixes="MYJIRA", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="MYJIRA", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         assert checker.succeed_always is False
 
         # Test explicit succeed_always=True
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             succeed_always=True,
         )
@@ -250,14 +252,14 @@ class TestTodoChecker:
 
         # Test with other parameters
         checker = TodoChecker(
-            jira_prefixes=["MYJIRA", "PROJECT"],
+            ticket_prefixes=["MYJIRA", "PROJECT"],
             comment_prefixes=["TODO", "FIXME"],
             quiet=True,
             succeed_always=True,
         )
         assert checker.succeed_always is True
         assert checker.quiet is True
-        assert checker.jira_prefixes == ["MYJIRA", "PROJECT"]
+        assert checker.ticket_prefixes == ["MYJIRA", "PROJECT"]
 
     def test_succeed_always_exit_code_behavior(self, test_data_dir, capsys):
         """Test exit code behavior with succeed_always flag."""
@@ -265,7 +267,7 @@ class TestTodoChecker:
 
         # Test 1: Normal behavior - should return 1 for violations
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             succeed_always=False,
         )
@@ -275,7 +277,7 @@ class TestTodoChecker:
 
         # Test 2: succeed_always=True - should return 0 despite violations
         checker_succeed = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             succeed_always=True,
         )
@@ -302,7 +304,7 @@ class TestTodoChecker:
         test_file = str(test_data_dir / "test_file_with_violations.py")
 
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             quiet=True,
             succeed_always=True,
@@ -321,7 +323,7 @@ class TestTodoChecker:
 
         # Compare output between normal and succeed_always modes
         checker_normal = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             succeed_always=False,
         )
@@ -329,7 +331,7 @@ class TestTodoChecker:
         output_normal = capsys.readouterr()
 
         checker_succeed = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             succeed_always=True,
         )
@@ -360,14 +362,14 @@ class TestTicketTodoTracking:
         """Test TodoChecker initialization with current_ticket_id."""
         # Test without current_ticket_id
         checker = TodoChecker(
-            jira_prefixes="MYJIRA", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="MYJIRA", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         assert checker.current_ticket_id is None
         assert checker.ticket_todos == []
 
         # Test with current_ticket_id
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             current_ticket_id="MYJIRA-123",
         )
@@ -378,7 +380,7 @@ class TestTicketTodoTracking:
         """Test that TODOs matching current ticket are tracked separately."""
         # Create checker with current ticket ID that exists in the file
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             current_ticket_id="MYJIRA-100",
         )
@@ -398,7 +400,7 @@ class TestTicketTodoTracking:
         """Test yellow warning output for ticket-specific TODOs."""
         # Create checker with current ticket ID
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             current_ticket_id="MYJIRA-100",
             quiet=False,
@@ -421,7 +423,7 @@ class TestTicketTodoTracking:
         """Test no output when there are no TODOs for current ticket."""
         # Create checker with a ticket ID that doesn't appear in the file
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             current_ticket_id="MYJIRA-999",
             quiet=False,
@@ -439,7 +441,7 @@ class TestTicketTodoTracking:
     def test_ticket_todos_quiet_mode(self, test_data_dir, capsys):
         """Test that ticket TODOs are suppressed in quiet mode."""
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             current_ticket_id="MYJIRA-100",
             quiet=True,
@@ -468,7 +470,7 @@ class TestTicketTodoTracking:
 
         try:
             checker = TodoChecker(
-                jira_prefixes="MYJIRA",
+                ticket_prefixes="MYJIRA",
                 comment_prefixes=DEFAULT_COMMENT_PREFIXES,
                 current_ticket_id="MYJIRA-123",
             )
@@ -505,7 +507,7 @@ class TestTicketTodoTracking:
     def test_ticket_todos_do_not_affect_exit_code(self, test_data_dir):
         """Test that ticket TODOs don't cause exit code failures."""
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             current_ticket_id="MYJIRA-100",
         )
@@ -520,7 +522,7 @@ class TestTicketTodoTracking:
     def test_without_current_ticket_id(self, test_data_dir, capsys):
         """Test behavior when no current_ticket_id is provided."""
         checker = TodoChecker(
-            jira_prefixes="MYJIRA",
+            ticket_prefixes="MYJIRA",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             current_ticket_id=None,  # No current ticket
         )
@@ -538,7 +540,7 @@ class TestTicketTodoTracking:
     def test_find_todos_with_grep(self, tmp_path):
         """Test grep-based TODO detection."""
         checker = TodoChecker(
-            jira_prefixes="TEST",
+            ticket_prefixes="TEST",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             quiet=True,
         )
@@ -569,7 +571,7 @@ class TestTicketTodoTracking:
     def test_get_all_repo_files(self):
         """Test repository file discovery."""
         checker = TodoChecker(
-            jira_prefixes="TEST",
+            ticket_prefixes="TEST",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             quiet=True,
         )
@@ -596,7 +598,7 @@ class TestTicketTodoTracking:
     def test_check_files_with_no_files_provided(self, capsys):
         """Test check_files when no files are provided (None)."""
         checker = TodoChecker(
-            jira_prefixes="TEST",
+            ticket_prefixes="TEST",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             quiet=False,
         )
@@ -614,7 +616,7 @@ class TestTicketTodoTracking:
     def test_staged_vs_unstaged_output(self, tmp_path, capsys):
         """Test that staged and unstaged violations are displayed differently when check_unstaged is True."""
         checker = TodoChecker(
-            jira_prefixes="TEST",
+            ticket_prefixes="TEST",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             quiet=False,
             check_unstaged=True,
@@ -649,7 +651,7 @@ class TestTicketTodoTracking:
     def test_no_check_unstaged_only_checks_staged(self, tmp_path, capsys):
         """Test that without check_unstaged, only staged files are checked."""
         checker = TodoChecker(
-            jira_prefixes="TEST",
+            ticket_prefixes="TEST",
             comment_prefixes=DEFAULT_COMMENT_PREFIXES,
             quiet=False,
             check_unstaged=False,
@@ -683,7 +685,7 @@ class TestPrecommitConfigParsing:
         """Test parsing when no .pre-commit-config.yaml exists."""
         monkeypatch.chdir(tmp_path)
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         config = checker.parse_precommit_config()
         assert config == {}
@@ -702,7 +704,7 @@ repos:
         config_file.write_text(config_content)
 
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         config = checker.parse_precommit_config()
 
@@ -723,7 +725,7 @@ repos:
         config_file.write_text(config_content)
 
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         config = checker.parse_precommit_config()
 
@@ -744,7 +746,7 @@ repos:
         config_file.write_text(config_content)
 
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         config = checker.parse_precommit_config()
 
@@ -765,7 +767,7 @@ repos:
         config_file.write_text(config_content)
 
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         config = checker.parse_precommit_config()
 
@@ -786,7 +788,7 @@ repos:
         config_file.write_text(config_content)
 
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         config = checker.parse_precommit_config()
 
@@ -807,7 +809,7 @@ repos:
         config_file.write_text(config_content)
 
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         config = checker.parse_precommit_config()
 
@@ -816,7 +818,7 @@ repos:
     def test_filter_files_by_files_pattern(self):
         """Test filtering files by files regex pattern."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         files = ["src/main.py", "src/utils.py", "tests/test_main.py", "README.md"]
         config = {"files": "^src/.*\\.py$"}
@@ -831,7 +833,7 @@ repos:
     def test_filter_files_by_exclude_pattern(self):
         """Test filtering files by exclude regex pattern."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         files = ["src/main.py", "src/utils.py", "tests/test_main.py", "README.md"]
         config = {"exclude": "^tests/.*$"}
@@ -846,7 +848,7 @@ repos:
     def test_filter_files_combined_patterns(self):
         """Test filtering with both files and exclude patterns."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         files = [
             "src/main.py",
@@ -866,7 +868,7 @@ repos:
     def test_filter_files_empty_config(self):
         """Test that empty config returns all files."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         files = ["file1.py", "file2.js", "file3.md"]
         config = {}
@@ -878,7 +880,7 @@ repos:
     def test_filter_files_by_types(self, tmp_path):
         """Test filtering files by types using identify library."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
 
         # Create actual files so identify can check them
@@ -901,7 +903,7 @@ repos:
     def test_filter_files_by_types_or(self, tmp_path):
         """Test filtering files by types_or using identify library."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
 
         # Create actual files
@@ -924,7 +926,7 @@ repos:
     def test_filter_files_by_exclude_types(self, tmp_path):
         """Test filtering files by exclude_types using identify library."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
 
         # Create actual files
@@ -948,7 +950,7 @@ class TestNoqaExclusion:
     def test_noqa_at_end_of_line(self, tmp_path):
         """Test that lines ending with noqa are excluded."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         test_file.write_text("# TODO: This should be ignored  noqa\n")
@@ -959,7 +961,7 @@ class TestNoqaExclusion:
     def test_noqa_with_trailing_whitespace(self, tmp_path):
         """Test that lines with noqa and trailing whitespace are excluded."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         test_file.write_text("# TODO: This should be ignored  noqa  \n")
@@ -970,7 +972,7 @@ class TestNoqaExclusion:
     def test_noqa_fix_code_identifier(self, tmp_path):
         """Test that lines with noqa: FIX001 are excluded."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         test_file.write_text("# TODO: This should be ignored  noqa: FIX001\n")
@@ -981,7 +983,7 @@ class TestNoqaExclusion:
     def test_noqa_fix_code_with_other_codes(self, tmp_path):
         """Test that lines with noqa: FIX001 and other codes are excluded."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         test_file.write_text("# TODO: This should be ignored  noqa: FIX001, E501\n")
@@ -992,7 +994,7 @@ class TestNoqaExclusion:
     def test_noqa_case_insensitive(self, tmp_path):
         """Test that noqa matching is case insensitive."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         test_file.write_text(
@@ -1005,7 +1007,7 @@ class TestNoqaExclusion:
     def test_no_noqa_still_violation(self, tmp_path):
         """Test that lines without noqa are still violations."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         test_file.write_text("# TODO: This is a real violation\n")
@@ -1017,7 +1019,7 @@ class TestNoqaExclusion:
     def test_noqa_other_identifier_still_violation(self, tmp_path):
         """Test that noqa with other identifier (not FIX codes) is still a violation."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         test_file.write_text("# TODO: This is NOT ignored  noqa: E501\n")
@@ -1029,7 +1031,7 @@ class TestNoqaExclusion:
     def test_noqa_in_middle_not_excluded(self, tmp_path):
         """Test that noqa in middle of line without FIX codes is not excluded."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         test_file.write_text(
@@ -1042,7 +1044,7 @@ class TestNoqaExclusion:
     def test_noqa_mixed_with_regular_todos(self, tmp_path):
         """Test file with mix of noqa and regular TODOs."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         content = """# TODO: First violation
@@ -1063,7 +1065,7 @@ class TestNoqaExclusion:
     def test_noqa_with_grep_method(self, tmp_path):
         """Test that noqa exclusion works with grep-based detection."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
 
         # Create multiple files to trigger grep-based detection (4+ files)
@@ -1094,7 +1096,7 @@ class TestNoqaExclusion:
     def test_noqa_with_valid_jira_reference(self, tmp_path):
         """Test that noqa doesn't interfere with valid Jira references."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         test_file.write_text("# TODO TEST-123: This has valid ref and noqa  noqa\n")
@@ -1106,7 +1108,7 @@ class TestNoqaExclusion:
     def test_all_fix_codes_excluded(self, tmp_path):
         """Test that all four FIX codes (FIX001, FIX002, FIX003, FIX004) work correctly."""
         checker = TodoChecker(
-            jira_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
+            ticket_prefixes="TEST", comment_prefixes=DEFAULT_COMMENT_PREFIXES
         )
         test_file = tmp_path / "test.py"
         content = """# TODO: Excluded with FIX001  noqa: FIX001
