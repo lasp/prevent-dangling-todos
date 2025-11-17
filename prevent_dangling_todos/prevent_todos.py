@@ -9,7 +9,17 @@ import sys
 import re
 import os
 import subprocess
-from typing import List, Optional, Tuple, Union, Dict
+from typing import List, Optional, Tuple, Union, Dict, Any
+
+try:
+    import yaml
+    from identify import identify
+
+    HAS_YAML = True
+    HAS_IDENTIFY = True
+except ImportError:
+    HAS_YAML = False
+    HAS_IDENTIFY = False
 
 
 class TodoChecker:
@@ -31,6 +41,8 @@ class TodoChecker:
         Whether to show detailed output including config, violations, file status, and help
     succeed_always : bool
         Whether to always exit with code 0 even when violations are found
+    check_unstaged : bool
+        Whether to also check unstaged files (as warnings)
     exit_code : int
         Track exit code for violations (0 = success, 1 = violations found)
     comment_pattern : re.Pattern
@@ -47,6 +59,7 @@ class TodoChecker:
         verbose: bool = False,
         succeed_always: bool = False,
         current_ticket_id: Optional[str] = None,
+        check_unstaged: bool = False,
     ):
         """
         Initialize the TodoChecker.
@@ -66,6 +79,8 @@ class TodoChecker:
         current_ticket_id : str, optional
             The ticket ID for the current branch (e.g., "LIBSDC-123"). If provided, TODOs
             matching this ticket will be tracked separately for informational output.
+        check_unstaged : bool, optional
+            If True, also check unstaged files for violations (as warnings). Default is False.
         """
         # Always store as list internally
         if isinstance(jira_prefixes, str):
@@ -76,6 +91,7 @@ class TodoChecker:
         self.quiet = quiet
         self.verbose = verbose
         self.succeed_always = succeed_always
+        self.check_unstaged = check_unstaged
         self.exit_code = 0
         self.current_ticket_id = current_ticket_id
         self.ticket_todos: list[tuple] = []  # Track TODOs for the current ticket
@@ -107,17 +123,24 @@ class TodoChecker:
         -----
         This method creates two compiled regex patterns:
         - comment_pattern: Matches work comment prefixes
-        - jira_pattern: Matches Jira issue references
+        - jira_pattern: Matches Jira issue references (or None if no prefixes)
         """
         # Pattern to find work comments
         prefixes_pattern = "|".join(self.comment_prefixes)
         self.comment_pattern = re.compile(rf"\b({prefixes_pattern})\b")
 
         # Pattern to find Jira references - match any of the allowed prefixes
-        jira_prefixes_pattern = "|".join(
-            re.escape(prefix) for prefix in self.jira_prefixes
-        )
-        self.jira_pattern = re.compile(rf"({jira_prefixes_pattern})-\d+")
+        # If no jira prefixes are provided, jira_pattern will be None
+        # meaning ALL work comments are violations
+        if self.jira_prefixes:
+            jira_prefixes_pattern = "|".join(
+                re.escape(prefix) for prefix in self.jira_prefixes
+            )
+            self.jira_pattern: Optional[re.Pattern] = re.compile(
+                rf"({jira_prefixes_pattern})-\d+"
+            )
+        else:
+            self.jira_pattern = None
 
     def find_todos_with_grep(
         self, file_paths: List[str]
@@ -170,16 +193,21 @@ class TodoChecker:
                             content = parts[2]
 
                             # Check if this line has a Jira reference
-                            if not self.jira_pattern.search(content):
+                            # If jira_pattern is None, ALL work comments are violations
+                            if (
+                                self.jira_pattern is None
+                                or not self.jira_pattern.search(content)
+                            ):
                                 if file_path not in todos_by_file:
                                     todos_by_file[file_path] = []
                                 todos_by_file[file_path].append(
                                     (line_num, content.rstrip())
                                 )
 
-                            # Track current ticket TODOs
+                            # Track current ticket TODOs (only if we have jira patterns)
                             elif (
-                                self.current_ticket_id
+                                self.jira_pattern is not None
+                                and self.current_ticket_id
                                 and self.current_ticket_id in content
                             ):
                                 self.ticket_todos.append(
@@ -276,6 +304,146 @@ class TodoChecker:
                 )
             return []
 
+    def parse_precommit_config(
+        self, hook_id: str = "prevent-dangling-todos"
+    ) -> Dict[str, Any]:
+        """
+        Parse .pre-commit-config.yaml to extract file filtering configuration.
+
+        Parameters
+        ----------
+        hook_id : str, optional
+            The hook ID to look for in the config. Default is "prevent-dangling-todos".
+
+        Returns
+        -------
+        dict
+            Dictionary containing filtering fields:
+            - files: regex pattern for included files
+            - exclude: regex pattern for excluded files
+            - types: list of file types to include
+            - types_or: list of file types to include (OR logic)
+            - exclude_types: list of file types to exclude
+        """
+        if not HAS_YAML:
+            return {}
+
+        config_path = ".pre-commit-config.yaml"
+        if not os.path.isfile(config_path):
+            return {}
+
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                config = yaml.safe_load(f)
+
+            if not config or "repos" not in config:
+                return {}
+
+            # Search for our hook in the repos
+            for repo in config.get("repos", []):
+                for hook in repo.get("hooks", []):
+                    if hook.get("id") == hook_id:
+                        # Extract filtering fields
+                        result = {}
+                        if "files" in hook:
+                            result["files"] = hook["files"]
+                        if "exclude" in hook:
+                            result["exclude"] = hook["exclude"]
+                        if "types" in hook:
+                            result["types"] = hook["types"]
+                        if "types_or" in hook:
+                            result["types_or"] = hook["types_or"]
+                        if "exclude_types" in hook:
+                            result["exclude_types"] = hook["exclude_types"]
+                        return result
+
+            return {}
+        except Exception as e:
+            if not self.quiet:
+                print(
+                    f"⚠️  Warning: Could not parse .pre-commit-config.yaml: {e}",
+                    file=sys.stderr,
+                )
+            return {}
+
+    def filter_files_by_precommit_config(
+        self, file_paths: List[str], config: Dict[str, Any]
+    ) -> List[str]:
+        """
+        Filter files based on pre-commit configuration.
+
+        Parameters
+        ----------
+        file_paths : list of str
+            List of file paths to filter
+        config : dict
+            Configuration dictionary from parse_precommit_config()
+
+        Returns
+        -------
+        list of str
+            Filtered list of file paths
+        """
+        if not config:
+            return file_paths
+
+        filtered = file_paths
+
+        # Apply 'files' regex filter (include pattern)
+        if "files" in config:
+            try:
+                files_pattern = re.compile(config["files"])
+                filtered = [f for f in filtered if files_pattern.search(f)]
+            except re.error:
+                pass  # Invalid regex, skip filtering
+
+        # Apply 'exclude' regex filter
+        if "exclude" in config:
+            try:
+                exclude_pattern = re.compile(config["exclude"])
+                filtered = [f for f in filtered if not exclude_pattern.search(f)]
+            except re.error:
+                pass  # Invalid regex, skip filtering
+
+        # Apply type filters using identify library
+        if HAS_IDENTIFY and (
+            "types" in config or "types_or" in config or "exclude_types" in config
+        ):
+            type_filtered = []
+            for f in filtered:
+                if not os.path.isfile(f):
+                    continue
+
+                try:
+                    file_types = set(identify.tags_from_path(f))
+
+                    # Check 'types' (all must match)
+                    if "types" in config:
+                        required_types = set(config["types"])
+                        if not required_types.issubset(file_types):
+                            continue
+
+                    # Check 'types_or' (at least one must match)
+                    if "types_or" in config:
+                        or_types = set(config["types_or"])
+                        if not or_types.intersection(file_types):
+                            continue
+
+                    # Check 'exclude_types' (none should match)
+                    if "exclude_types" in config:
+                        exclude_types = set(config["exclude_types"])
+                        if exclude_types.intersection(file_types):
+                            continue
+
+                    type_filtered.append(f)
+                except Exception:
+                    # If we can't identify the file type, include it
+                    type_filtered.append(f)
+
+            filtered = type_filtered
+
+        return filtered
+
     def check_file(self, file_path: str) -> List[Tuple[int, str]]:
         """
         Check a single file for work comments without Jira references.
@@ -302,10 +470,17 @@ class TodoChecker:
                     # Check if line contains a work comment
                     if self.comment_pattern.search(line):
                         # Check if it also contains a Jira reference
-                        if not self.jira_pattern.search(line):
+                        # If jira_pattern is None, ALL work comments are violations
+                        if self.jira_pattern is None or not self.jira_pattern.search(
+                            line
+                        ):
                             violations.append((line_num, line.rstrip()))
                         # If we have a current ticket, check if this TODO is for it
-                        elif self.current_ticket_id and self.current_ticket_id in line:
+                        elif (
+                            self.jira_pattern is not None
+                            and self.current_ticket_id
+                            and self.current_ticket_id in line
+                        ):
                             self.ticket_todos.append(
                                 (file_path, line_num, line.rstrip())
                             )
@@ -316,12 +491,13 @@ class TodoChecker:
 
     def check_files(self, file_paths: Optional[List[str]]) -> int:
         """
-        Check files for violations. If no files provided, checks all tracked files in the repo.
+        Check files for violations. Behavior depends on check_unstaged flag.
 
         Parameters
         ----------
         file_paths : list of str or None
-            List of file paths to check (staged files). If None, checks all tracked files.
+            List of file paths to check (staged files). If None and check_unstaged is False,
+            prints a warning and returns 0.
 
         Returns
         -------
@@ -332,19 +508,41 @@ class TodoChecker:
         staged_files = file_paths if file_paths else []
         all_repo_files = []
 
-        # If no files were provided, or if we always want to check all files
-        # Get all files in the repository for warning purposes
+        # Handle the case where no files are provided
         if not file_paths:
-            all_repo_files = self.get_all_repo_files()
-            files_to_check = all_repo_files
+            if not self.check_unstaged:
+                # No files and not checking unstaged - nothing to do
+                if not self.quiet:
+                    print(
+                        "⚠️  Warning: No files provided and --check-unstaged not set. Nothing to check."
+                    )
+                return 0 if self.succeed_always else 0
+            else:
+                # Check all unstaged files, filtered by pre-commit config
+                all_repo_files = self.get_all_repo_files()
+                precommit_config = self.parse_precommit_config()
+                filtered_repo_files = self.filter_files_by_precommit_config(
+                    all_repo_files, precommit_config
+                )
+                files_to_check = filtered_repo_files
         else:
-            # We have staged files, but also get all repo files for comprehensive checking
-            all_repo_files = self.get_all_repo_files()
-            files_to_check = file_paths  # Check provided files first
-
-            # Add any repo files not in the staged list for warning-only checks
-            unstaged_files = [f for f in all_repo_files if f not in staged_files]
-            files_to_check = staged_files + unstaged_files
+            # We have staged files
+            if self.check_unstaged:
+                # Also check unstaged files for warnings
+                all_repo_files = self.get_all_repo_files()
+                # Filter unstaged files by pre-commit config
+                precommit_config = self.parse_precommit_config()
+                filtered_repo_files = self.filter_files_by_precommit_config(
+                    all_repo_files, precommit_config
+                )
+                # Add any repo files not in the staged list for warning-only checks
+                unstaged_files = [
+                    f for f in filtered_repo_files if f not in staged_files
+                ]
+                files_to_check = staged_files + unstaged_files
+            else:
+                # Only check the provided (staged) files
+                files_to_check = staged_files
 
         # Track violations separately for staged vs unstaged
         staged_violations = []
@@ -353,10 +551,16 @@ class TodoChecker:
 
         # Verbose mode: Show configuration at the beginning
         if self.verbose:
-            print(
-                f"🔍 Checking work comments for Jira references to projects {', '.join(self.jira_prefixes)}... "
-                f"Checking for: {', '.join(self.comment_prefixes)}"
-            )
+            if self.jira_prefixes:
+                print(
+                    f"🔍 Checking work comments for Jira references to projects {', '.join(self.jira_prefixes)}... "
+                    f"Checking for: {', '.join(self.comment_prefixes)}"
+                )
+            else:
+                print(
+                    f"🔍 Disallowing ALL work comments (no Jira prefix specified)... "
+                    f"Checking for: {', '.join(self.comment_prefixes)}"
+                )
             if not file_paths:
                 print(
                     "📁 No specific files provided, checking all tracked files in repository"
@@ -438,34 +642,40 @@ class TodoChecker:
             # Show help text only if violations were found in staged files
             if self.exit_code == 1:
                 print("")
-                print("💡 Please add Jira issue references to work comments like:")
-                # Use first prefix for examples, but mention all are valid
-                first_jira = self.jira_prefixes[0]
+                if self.jira_prefixes:
+                    print("💡 Please add Jira issue references to work comments like:")
+                    # Use first prefix for examples, but mention all are valid
+                    first_jira = self.jira_prefixes[0]
 
-                # Generate examples based on the actual comment prefixes being checked
-                # Use up to 3 different comment prefixes for examples
-                example_prefixes = self.comment_prefixes[:3]
-                example_formats = [
-                    ("//", "Implement user authentication"),
-                    ("#", "Handle edge case for empty input"),
-                    ("/*", "Temporary workaround for API issue", "*/"),
-                ]
+                    # Generate examples based on the actual comment prefixes being checked
+                    # Use up to 3 different comment prefixes for examples
+                    example_prefixes = self.comment_prefixes[:3]
+                    example_formats = [
+                        ("//", "Implement user authentication"),
+                        ("#", "Handle edge case for empty input"),
+                        ("/*", "Temporary workaround for API issue", "*/"),
+                    ]
 
-                for i, comment_prefix in enumerate(example_prefixes):
-                    if i < len(example_formats):
-                        fmt = example_formats[i]
-                        if len(fmt) == 3:  # Multi-line comment style
-                            print(
-                                f"   {fmt[0]} {comment_prefix} {first_jira}-{123 + i}: {fmt[1]} {fmt[2]}"
-                            )
-                        else:  # Single-line comment style
-                            print(
-                                f"   {fmt[0]} {comment_prefix} {first_jira}-{123 + i}: {fmt[1]}"
-                            )
+                    for i, comment_prefix in enumerate(example_prefixes):
+                        if i < len(example_formats):
+                            fmt = example_formats[i]
+                            if len(fmt) == 3:  # Multi-line comment style
+                                print(
+                                    f"   {fmt[0]} {comment_prefix} {first_jira}-{123 + i}: {fmt[1]} {fmt[2]}"
+                                )
+                            else:  # Single-line comment style
+                                print(
+                                    f"   {fmt[0]} {comment_prefix} {first_jira}-{123 + i}: {fmt[1]}"
+                                )
 
-                if len(self.jira_prefixes) > 1:
-                    other_prefixes = ", ".join(self.jira_prefixes[1:])
-                    print(f"   (Also valid: {other_prefixes})")
+                    if len(self.jira_prefixes) > 1:
+                        other_prefixes = ", ".join(self.jira_prefixes[1:])
+                        print(f"   (Also valid: {other_prefixes})")
+                else:
+                    print("💡 Work comments (TODO, FIXME, etc.) are not allowed.")
+                    print(
+                        "   Please remove them or specify a Jira prefix to allow tracked work items."
+                    )
 
         # Return 0 if succeed_always is True, otherwise return the actual exit code
         return 0 if self.succeed_always else self.exit_code

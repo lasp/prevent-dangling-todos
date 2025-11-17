@@ -536,8 +536,8 @@ class TestTicketTodoTracking:
                 assert exit_code == 0
 
     def test_staged_vs_unstaged_output(self, tmp_path, capsys):
-        """Test that staged and unstaged violations are displayed differently."""
-        checker = TodoChecker(jira_prefixes="TEST", quiet=False)
+        """Test that staged and unstaged violations are displayed differently when check_unstaged is True."""
+        checker = TodoChecker(jira_prefixes="TEST", quiet=False, check_unstaged=True)
 
         # Create test files
         staged_file = tmp_path / "staged.py"
@@ -564,3 +564,265 @@ class TestTicketTodoTracking:
             assert "WARNING:" in captured.out
             assert "Staged violation" in captured.out
             assert "Unstaged violation" in captured.out
+
+    def test_no_check_unstaged_only_checks_staged(self, tmp_path, capsys):
+        """Test that without check_unstaged, only staged files are checked."""
+        checker = TodoChecker(jira_prefixes="TEST", quiet=False, check_unstaged=False)
+
+        # Create test files
+        staged_file = tmp_path / "staged.py"
+        staged_file.write_text("# TODO: Staged violation\n")
+
+        unstaged_file = tmp_path / "unstaged.py"
+        unstaged_file.write_text("# FIXME: Unstaged violation\n")
+
+        # Pass only staged file as argument
+        exit_code = checker.check_files([str(staged_file)])
+
+        # Should fail because staged file has violations
+        assert exit_code == 1
+
+        captured = capsys.readouterr()
+        # Check that only staged file is checked, no warnings for unstaged
+        assert "ERROR:" in captured.out
+        assert "Staged violation" in captured.out
+        assert "WARNING: Dangling TODOs" not in captured.out
+        assert "Unstaged violation" not in captured.out
+
+
+class TestPrecommitConfigParsing:
+    """Test pre-commit config parsing and file filtering."""
+
+    def test_parse_precommit_config_no_file(self, tmp_path, monkeypatch):
+        """Test parsing when no .pre-commit-config.yaml exists."""
+        monkeypatch.chdir(tmp_path)
+        checker = TodoChecker(jira_prefixes="TEST")
+        config = checker.parse_precommit_config()
+        assert config == {}
+
+    def test_parse_precommit_config_with_files_pattern(self, tmp_path, monkeypatch):
+        """Test parsing files pattern from config."""
+        monkeypatch.chdir(tmp_path)
+        config_content = """
+repos:
+  - repo: local
+    hooks:
+      - id: prevent-dangling-todos
+        files: '^src/.*\\.py$'
+"""
+        config_file = tmp_path / ".pre-commit-config.yaml"
+        config_file.write_text(config_content)
+
+        checker = TodoChecker(jira_prefixes="TEST")
+        config = checker.parse_precommit_config()
+
+        assert "files" in config
+        assert config["files"] == "^src/.*\\.py$"
+
+    def test_parse_precommit_config_with_exclude(self, tmp_path, monkeypatch):
+        """Test parsing exclude pattern from config."""
+        monkeypatch.chdir(tmp_path)
+        config_content = """
+repos:
+  - repo: local
+    hooks:
+      - id: prevent-dangling-todos
+        exclude: '^tests/.*$'
+"""
+        config_file = tmp_path / ".pre-commit-config.yaml"
+        config_file.write_text(config_content)
+
+        checker = TodoChecker(jira_prefixes="TEST")
+        config = checker.parse_precommit_config()
+
+        assert "exclude" in config
+        assert config["exclude"] == "^tests/.*$"
+
+    def test_parse_precommit_config_with_types(self, tmp_path, monkeypatch):
+        """Test parsing types from config."""
+        monkeypatch.chdir(tmp_path)
+        config_content = """
+repos:
+  - repo: local
+    hooks:
+      - id: prevent-dangling-todos
+        types: [python, text]
+"""
+        config_file = tmp_path / ".pre-commit-config.yaml"
+        config_file.write_text(config_content)
+
+        checker = TodoChecker(jira_prefixes="TEST")
+        config = checker.parse_precommit_config()
+
+        assert "types" in config
+        assert config["types"] == ["python", "text"]
+
+    def test_parse_precommit_config_with_types_or(self, tmp_path, monkeypatch):
+        """Test parsing types_or from config."""
+        monkeypatch.chdir(tmp_path)
+        config_content = """
+repos:
+  - repo: local
+    hooks:
+      - id: prevent-dangling-todos
+        types_or: [python, javascript]
+"""
+        config_file = tmp_path / ".pre-commit-config.yaml"
+        config_file.write_text(config_content)
+
+        checker = TodoChecker(jira_prefixes="TEST")
+        config = checker.parse_precommit_config()
+
+        assert "types_or" in config
+        assert config["types_or"] == ["python", "javascript"]
+
+    def test_parse_precommit_config_with_exclude_types(self, tmp_path, monkeypatch):
+        """Test parsing exclude_types from config."""
+        monkeypatch.chdir(tmp_path)
+        config_content = """
+repos:
+  - repo: local
+    hooks:
+      - id: prevent-dangling-todos
+        exclude_types: [binary, image]
+"""
+        config_file = tmp_path / ".pre-commit-config.yaml"
+        config_file.write_text(config_content)
+
+        checker = TodoChecker(jira_prefixes="TEST")
+        config = checker.parse_precommit_config()
+
+        assert "exclude_types" in config
+        assert config["exclude_types"] == ["binary", "image"]
+
+    def test_parse_precommit_config_hook_not_found(self, tmp_path, monkeypatch):
+        """Test parsing when hook is not found in config."""
+        monkeypatch.chdir(tmp_path)
+        config_content = """
+repos:
+  - repo: local
+    hooks:
+      - id: other-hook
+        files: '^src/.*$'
+"""
+        config_file = tmp_path / ".pre-commit-config.yaml"
+        config_file.write_text(config_content)
+
+        checker = TodoChecker(jira_prefixes="TEST")
+        config = checker.parse_precommit_config()
+
+        assert config == {}
+
+    def test_filter_files_by_files_pattern(self):
+        """Test filtering files by files regex pattern."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        files = ["src/main.py", "src/utils.py", "tests/test_main.py", "README.md"]
+        config = {"files": "^src/.*\\.py$"}
+
+        filtered = checker.filter_files_by_precommit_config(files, config)
+
+        assert "src/main.py" in filtered
+        assert "src/utils.py" in filtered
+        assert "tests/test_main.py" not in filtered
+        assert "README.md" not in filtered
+
+    def test_filter_files_by_exclude_pattern(self):
+        """Test filtering files by exclude regex pattern."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        files = ["src/main.py", "src/utils.py", "tests/test_main.py", "README.md"]
+        config = {"exclude": "^tests/.*$"}
+
+        filtered = checker.filter_files_by_precommit_config(files, config)
+
+        assert "src/main.py" in filtered
+        assert "src/utils.py" in filtered
+        assert "tests/test_main.py" not in filtered
+        assert "README.md" in filtered
+
+    def test_filter_files_combined_patterns(self):
+        """Test filtering with both files and exclude patterns."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        files = [
+            "src/main.py",
+            "src/test_utils.py",
+            "tests/test_main.py",
+            "docs/readme.py",
+        ]
+        config = {"files": ".*\\.py$", "exclude": "^tests/.*$"}
+
+        filtered = checker.filter_files_by_precommit_config(files, config)
+
+        assert "src/main.py" in filtered
+        assert "src/test_utils.py" in filtered
+        assert "tests/test_main.py" not in filtered
+        assert "docs/readme.py" in filtered
+
+    def test_filter_files_empty_config(self):
+        """Test that empty config returns all files."""
+        checker = TodoChecker(jira_prefixes="TEST")
+        files = ["file1.py", "file2.js", "file3.md"]
+        config = {}
+
+        filtered = checker.filter_files_by_precommit_config(files, config)
+
+        assert filtered == files
+
+    def test_filter_files_by_types(self, tmp_path):
+        """Test filtering files by types using identify library."""
+        checker = TodoChecker(jira_prefixes="TEST")
+
+        # Create actual files so identify can check them
+        py_file = tmp_path / "main.py"
+        py_file.write_text("# Python file")
+        js_file = tmp_path / "app.js"
+        js_file.write_text("// JavaScript file")
+        md_file = tmp_path / "README.md"
+        md_file.write_text("# Markdown file")
+
+        files = [str(py_file), str(js_file), str(md_file)]
+        config = {"types": ["python"]}
+
+        filtered = checker.filter_files_by_precommit_config(files, config)
+
+        assert str(py_file) in filtered
+        assert str(js_file) not in filtered
+        assert str(md_file) not in filtered
+
+    def test_filter_files_by_types_or(self, tmp_path):
+        """Test filtering files by types_or using identify library."""
+        checker = TodoChecker(jira_prefixes="TEST")
+
+        # Create actual files
+        py_file = tmp_path / "main.py"
+        py_file.write_text("# Python file")
+        js_file = tmp_path / "app.js"
+        js_file.write_text("// JavaScript file")
+        md_file = tmp_path / "README.md"
+        md_file.write_text("# Markdown file")
+
+        files = [str(py_file), str(js_file), str(md_file)]
+        config = {"types_or": ["python", "javascript"]}
+
+        filtered = checker.filter_files_by_precommit_config(files, config)
+
+        assert str(py_file) in filtered
+        assert str(js_file) in filtered
+        assert str(md_file) not in filtered
+
+    def test_filter_files_by_exclude_types(self, tmp_path):
+        """Test filtering files by exclude_types using identify library."""
+        checker = TodoChecker(jira_prefixes="TEST")
+
+        # Create actual files
+        py_file = tmp_path / "main.py"
+        py_file.write_text("# Python file")
+        md_file = tmp_path / "README.md"
+        md_file.write_text("# Markdown file")
+
+        files = [str(py_file), str(md_file)]
+        config = {"exclude_types": ["markdown"]}
+
+        filtered = checker.filter_files_by_precommit_config(files, config)
+
+        assert str(py_file) in filtered
+        assert str(md_file) not in filtered
