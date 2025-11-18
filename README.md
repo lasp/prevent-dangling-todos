@@ -4,6 +4,8 @@ A pre-commit hook that prevents TODO, FIXME, and other work comments without tic
 
 This tool helps maintain code quality by ensuring all work comments are properly linked to issues in your project tracker (Jira, GitHub Issues, Linear, Asana, etc.).
 
+**Currently Windows platforms are not supported due to the lack of `grep`. Mac and Linux should work fine and we're working on Windows support.**
+
 ## Features
 
 - ✅ **Universal issue tracker support**: Works with Jira, GitHub, Linear, and any tracker using `PREFIX-NUMBER` format

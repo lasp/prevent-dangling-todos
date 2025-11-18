@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13"]
     defaults:
       run:
@@ -50,17 +50,17 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        source $VENV 
+        source $VENV
         pytest --cov=prevent_dangling_todos --cov-report=xml --cov-report=term-missing
 
     - name: Run linting
       run: |
-        source $VENV 
+        source $VENV
         ruff check .
 
     - name: Run type checking
       run: |
-        source $VENV 
+        source $VENV
         mypy prevent_dangling_todos
 
     - name: Upload coverage to Codecov
