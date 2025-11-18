@@ -82,9 +82,7 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
 RUN npm install -g @anthropic-ai/claude-code
 
 # Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-# Add uv to path
-ENV PATH="$PATH:/home/$USERNAME/.local/bin"
+RUN pip install uv
 
 # Copy and set up dev environment script
 USER root

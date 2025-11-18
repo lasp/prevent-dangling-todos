@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.0] - Unreleased
 
+### Project Infrastructure
+
+- **Migrated from Poetry to UV for Python package management**
+  - Replaced Poetry with UV for faster dependency resolution and installation
+  - Updated `pyproject.toml` to use `hatchling` build backend (PEP 517/518 compliant)
+  - Created `requirements.txt` and `requirements-dev.txt` for dependency management
+  - Updated CI/CD workflows (`.github/workflows/ci.yml` and `release.yml`) to use UV
+  - Updated devcontainer configuration (`.devcontainer/Dockerfile` and `setup-dev-environment.sh`) to use UV
+  - Updated all documentation and AI tooling instructions to reference UV
+  - **Migration for contributors**: Install UV with `pip install uv` or `curl -LsSf https://astral.sh/uv/install.sh | sh`, then use:
+    - `uv venv` to create a virtual environment
+    - `uv pip install -r requirements-dev.txt` to install dependencies
+    - `uv pip install -e .` to install the package in editable mode
+  - See `.github/copilot-instructions.md` for complete setup instructions
+
 ### Breaking Changes
 
 - **Renamed CLI arguments and environment variables for generic issue tracker support**
