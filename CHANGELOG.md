@@ -16,6 +16,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - This change makes the tool generic for any issue tracker (Jira, GitHub Issues, Linear, Asana, etc.)
   - **Migration**: Simply replace `-j` with `-t` in your `.pre-commit-config.yaml`. Old arguments continue to work.
 
+- **Ticket prefix is now optional, with changed behavior when not provided**
+  - In version 0.x, failing to provide a ticket prefix caused an error (exit code 2)
+  - In version 1.0, when no ticket prefix is provided, ALL work comments (TODO, FIXME, etc.) are treated as violations, regardless of any references they may contain
+  - This allows users to completely disallow work comments if desired
+  - A warning message is displayed when no ticket prefix is specified to inform users of this behavior
+
+- **Minimum Python version increased to 3.10**
+  - Python 3.9 is no longer supported
+  - This change allows usage of modern Python syntax features like PEP 604 union types
+
 ### Added
 
 - **Line-by-line exclusions** via `# noqa` comments ([#ffc479c](https://github.com/lasp/prevent-dangling-todos/commit/ffc479c))

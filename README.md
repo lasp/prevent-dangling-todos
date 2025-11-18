@@ -145,6 +145,8 @@ By default, these comment types are checked:
 
 Customize with `-c` or `--comment-prefix`.
 
+**Security Note:** Custom comment prefixes are matched using grep's `-F` flag (fixed strings, not regex patterns) to prevent command injection vulnerabilities.
+
 ## Advanced Features
 
 ### Line-by-Line Exclusions
