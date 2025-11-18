@@ -149,12 +149,13 @@ class TodoChecker:
         if not file_paths:
             return {}
 
-        # Build grep pattern from comment prefixes
-        pattern = "\\|".join(self.comment_prefixes)
-
-        # Build the grep command
-        # Use -H for filename, -n for line numbers, -I to skip binary files
-        cmd = ["grep", "-Hn", "-I", f"\\b\\({pattern}\\)\\b"] + file_paths
+        # Build the grep command using fixed string matching for each comment prefix
+        # Use -F for fixed strings (prevents regex injection), -H for filename,
+        # -n for line numbers, -I to skip binary files, -e for each prefix
+        cmd = ["grep", "-Hn", "-I", "-F"]
+        for prefix in self.comment_prefixes:
+            cmd.extend(["-e", prefix])
+        cmd.extend(file_paths)
 
         try:
             result = subprocess.run(
@@ -571,16 +572,10 @@ class TodoChecker:
         if self.verbose:
             print("")  # Blank line before summary
             for file_info in file_statuses:
-                if len(file_info) == 3:
-                    file_path, is_clean, is_staged = file_info
-                    status_icon = "✅" if is_clean else "❌"
-                    staged_text = " (staged)" if is_staged else " (unstaged)"
-                    print(f"{status_icon} {file_path}{staged_text}")
-                else:
-                    # Fallback for old format
-                    file_path, is_clean = file_info
-                    status_icon = "✅" if is_clean else "❌"
-                    print(f"{status_icon} {file_path}")
+                file_path, is_clean, is_staged = file_info
+                status_icon = "✅" if is_clean else "❌"
+                staged_text = " (staged)" if is_staged else " (unstaged)"
+                print(f"{status_icon} {file_path}{staged_text}")
 
             # Show help text only if violations were found in staged files
             if self.exit_code == 1:
