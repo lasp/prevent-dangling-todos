@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - Unreleased
+
 ### Changed
 
 - **Migrated from Poetry to UV for dependency management**
@@ -17,8 +19,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **For developers**: Use `uv sync --all-extras` instead of `poetry install`
   - **For running commands**: Use `uv run <command>` (e.g., `uv run pytest`)
   - **For CI**: Workflows now use `astral-sh/setup-uv` action with caching enabled
-
-## [1.0.0] - Unreleased
 
 ### Breaking Changes
 

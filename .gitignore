@@ -27,6 +27,7 @@ build
 dist
 libera_utils/_version.py
 poetry.lock
+uv.lock
 package-lock.json
 
 # Packages #
