@@ -23,7 +23,7 @@ jobs:
         python-version: '3.12'
 
     - name: Install UV
-      run: pip install uv
+      uses: astral-sh/setup-uv@v5
 
     - name: Extract tag information
       id: tag_info
@@ -40,11 +40,8 @@ jobs:
           echo "Release type: Pre-release"
         fi
 
-    - name: Install build tools
-      run: pip install build
-
     - name: Build package
-      run: python -m build
+      run: uv build
 
     - name: Create Release
       env:

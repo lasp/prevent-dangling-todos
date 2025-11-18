@@ -3,11 +3,11 @@
 # Set up the development environment
 
 # Install dependencies with UV
-uv pip install -e ".[dev]"
+uv sync --all-extras
 
 # Install pre-commit and pre-commit hooks
-pre-commit install
-pre-commit install-hooks
+uv run pre-commit install
+uv run pre-commit install-hooks
 
 # Configure Git
 

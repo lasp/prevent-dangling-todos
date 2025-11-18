@@ -50,6 +50,9 @@ ENV DEVCONTAINER=true
 RUN mkdir -p /home/$USERNAME/.claude && \
   chown -R $USERNAME:$USERNAME /home/$USERNAME/.claude
 
+# Install UV using the official installer (recommended method)
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
 # Create virtual environment and permanently activate it for this image
 # Note this venv is created outside of the context of the repo. If the devcontainer is created in mount mode,
 # we don't want to overwrite any local virtual environment
@@ -57,8 +60,6 @@ ENV VIRTUAL_ENV=/opt/venv
 RUN python -m venv $VIRTUAL_ENV && chown $USERNAME:$USERNAME -R $VIRTUAL_ENV
 # This adds not only the venv python executable but also all installed entrypoints to the PATH
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-# Upgrade pip to the latest version and install UV
-RUN pip install --upgrade pip uv
 
 # Set up non-root user
 USER $USERNAME
