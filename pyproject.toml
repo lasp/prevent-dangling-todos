@@ -8,19 +8,19 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["identify>=2.0.0", "pyyaml>=6.0"]
 
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+    "types-pyyaml>=6.0.12",
+]
+
 [project.scripts]
 prevent-dangling-todos = "prevent_dangling_todos.cli:main"
 
-[tool.poetry]
-
-[tool.poetry.group.dev.dependencies]
-pre-commit = "*"
-pytest = "*"
-pytest-cov = "*"
-ruff = "*"
-mypy = "*"
-types-pyyaml = "^6.0.12.20250915"
-
 [build-system]
-requires = ["poetry-core>=2.0.0,<3.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"

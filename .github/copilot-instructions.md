@@ -347,7 +347,7 @@ When suggesting code changes, always:
 | Lint code | `ruff check . --fix` |
 | Format code | `ruff format .` |
 | Type check | `mypy prevent_dangling_todos` |
-| Install dev deps | `pip install -e .[dev]` or use poetry |
+| Install dev deps | `uv pip install -e ".[dev]"` |
 | Run tool locally | `prevent-dangling-todos -t PREFIX file.py` |
 
 ---

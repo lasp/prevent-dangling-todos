@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Migrated from Poetry to UV for dependency management**
+  - Replaced Poetry build backend with setuptools (PEP 621 compliant)
+  - Updated all CI/CD workflows to use UV instead of Poetry
+  - Updated development environment setup to use UV
+  - Removed Poetry references from documentation and devcontainer
+  - **For developers**: Use `uv pip install -e ".[dev]"` instead of `poetry install`
+  - **For CI**: Workflows now use `uv` directly, providing faster dependency resolution
+
 ## [1.0.0] - Unreleased
 
 ### Breaking Changes

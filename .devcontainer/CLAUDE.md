@@ -45,7 +45,7 @@ prevent_dangling_todos/
          ci.yml           # Test matrix: Ubuntu/macOS, Python 3.11/3.12/3.13
          release.yml      # Release automation
       copilot-instructions.md  # GitHub Copilot instructions
-   pyproject.toml          # Python project configuration (Poetry-compatible)
+   pyproject.toml          # Python project configuration (PEP 621 standard)
    .pre-commit-config.yaml # Pre-commit hook configuration for this repo
    .pre-commit-hooks.yaml  # Hook definition for consumers
    README.md               # Comprehensive usage documentation (506 lines)
