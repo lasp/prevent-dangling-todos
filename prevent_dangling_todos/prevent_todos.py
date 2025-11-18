@@ -211,6 +211,11 @@ class TodoChecker:
 
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             # Fallback to file-by-file checking
+            if not self.quiet:
+                print(
+                    "⚠️  Warning: 'grep' failed (timeout, file not found, or OS error). Falling back to slower file-by-file checking.",
+                    file=sys.stderr,
+                )
             return {}
 
     def get_all_repo_files(self) -> List[str]:
