@@ -1,0 +1,3 @@
+# Runtime dependencies
+identify>=2.0.0
+pyyaml>=6.0

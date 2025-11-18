@@ -2,8 +2,9 @@
 
 # Set up the development environment
 
-# Install poetry dependencies
-poetry lock && poetry sync
+# Install dependencies with uv
+uv pip install -r requirements-dev.txt
+uv pip install -e .
 
 # Install pre-commit and pre-commit hooks
 pre-commit install

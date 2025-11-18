@@ -1,0 +1,9 @@
+# Development dependencies
+-r requirements.txt
+
+pre-commit
+pytest
+pytest-cov
+ruff
+mypy
+types-pyyaml>=6.0.12.20250915
