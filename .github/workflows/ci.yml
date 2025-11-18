@@ -12,6 +12,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # Windows was removed from the test matrix due to lack of `grep` support (see README).
+      # TODO: Restore Windows support when a suitable alternative to `grep` is available.
       matrix:
         os: [ubuntu-latest, macos-latest]
         python-version: ["3.11", "3.12", "3.13"]
