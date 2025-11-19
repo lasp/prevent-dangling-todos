@@ -75,17 +75,14 @@ class TestEndToEndBranchTodos:
                 mock_run.return_value = mock_result
 
                 with pytest.raises(SystemExit) as exc_info:
-                    main(["-j", "LIBSDC", temp_file])
+                    main(["-j", "LIBSDC", "-v", temp_file])
 
                 assert exc_info.value.code == 0  # No violations
 
                 captured = capsys.readouterr()
 
                 # Should show note about no ticket in branch
-                assert (
-                    "Note: No ticket ID detected in current branch 'main'"
-                    in captured.out
-                )
+                assert "No ticket ID detected in current branch 'main'" in captured.out
 
                 # Should not show any yellow warnings
                 assert (

@@ -652,14 +652,12 @@ class TestBranchDetection:
             mock_run.return_value = mock_result
 
             with pytest.raises(SystemExit) as exc_info:
-                main(["-j", "MYJIRA", test_file])
+                main(["-j", "MYJIRA", "-v", test_file])
 
             assert exc_info.value.code == 0
             captured = capsys.readouterr()
             # Should show informational message about no ticket
-            assert (
-                "Note: No ticket ID detected in current branch 'main'" in captured.out
-            )
+            assert "No ticket ID detected in current branch 'main'" in captured.out
 
     def test_cli_git_detection_failure(self, capsys):
         """Test CLI when git branch detection fails."""

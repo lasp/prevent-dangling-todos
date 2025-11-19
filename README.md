@@ -8,14 +8,15 @@ This tool helps maintain code quality by ensuring all work comments are properly
 
 ## Features
 
+- ❌ **Blocks commit of unplanned work items**: TODOs without ticket references in staged files prevent commits
 - ✅ **Universal issue tracker support**: Works with Jira, GitHub, Linear, and any tracker using `PREFIX-NUMBER` format
 - 🔍 **Multiple comment types**: Checks TODO, FIXME, XXX, HACK (customizable)
-- 🎯 **Branch-aware**: Automatically tracks TODOs for the current branch's ticket
+- 🎯 **Branch-aware**: Automatically calls out TODOs for the current branch's ticket
 - ⚡ **Fast**: Uses `grep` for efficient batch processing
 - 🎨 **Flexible output**: Standard, quiet, or verbose modes
 - 🔧 **Configurable**: Extensive filtering via `.pre-commit-config.yaml`
 - 📝 **Line-by-line exclusions**: Use `# noqa` comments to skip specific lines
-- ⚠️  **Warning mode**: Check unstaged files without blocking commits
+- ⚠️  **Warning mode**: Informational checks without blocking commits via `--succeed-always`
 
 ## Quick Start
 
@@ -42,32 +43,18 @@ repos:
     rev: v1.0.0
     hooks:
       - id: prevent-dangling-todos
-        args: ['-t', 'MYPROJECT']
+        args: ['-p', 'TODO', '-t', 'MYPROJECT', '--check-unstaged']
 ```
 
 ### Standalone installation
+
+This allows direct usage of the CLI tool `prevent-dangling-todos`.
 
 ```bash
 pip install git+https://github.com/lasp/prevent-dangling-todos.git
 ```
 
 ## Usage Examples
-
-### Basic Usage
-
-```yaml
-# For Jira
-args: ['-t', 'JIRA']
-
-# For GitHub Issues
-args: ['-t', 'GITHUB']
-
-# For Linear
-args: ['-t', 'LINEAR']
-
-# Multiple trackers
-args: ['-t', 'JIRA,GITHUB,LINEAR']
-```
 
 ### Recommended: Maximum Visibility
 
@@ -79,14 +66,16 @@ repos:
     hooks:
       - id: prevent-dangling-todos
         args: ['-t', 'MYPROJECT', '-v', '--check-unstaged']
-        verbose: true      # Always show output
+        verbose: true      # Always show output (pre-commit defaults to no output on hook success)
+        always_run: true   # Always run, even when no changes are staged (allows consistent checking of all files)
 ```
 
 **This configuration:**
-- Shows violations in staged files (❌ blocking errors)
-- Shows TODOs in unstaged files (⚠️ warnings only)
-- Tracks branch-specific TODOs (⚠️ informational)
+- Shows un-ticketed work items in staged files (❌ blocking errors)
+- Shows un-ticketed work items in unstaged files (⚠️ warnings only)
+- Tracks current ticket work-items for branches that include a ticket reference (⚠️ informational)
 - Always displays output even on success
+- **Note:** unstaged changes are stashed before pre-commit runs, so changes in unstaged files will not be reflected in the output.
 
 ### Non-Blocking Alerts
 
@@ -114,7 +103,7 @@ Perfect for:
 |----------|-------|-------------|
 | `--ticket-prefix` | `-t` | Ticket prefix(es) from your issue tracker (comma-separated) |
 | `--comment-prefix` | `-c` | Comment types to check (default: `TODO,FIXME,XXX,HACK`) |
-| `--check-unstaged` | `-u` | Also check unstaged files (as warnings) |
+| `--check-unstaged` | `-u` | Also check unstaged files (as warnings). **Note:** unstaged changes are stashed before pre-commit runs and are therefore ignored. |
 | `--verbose` | `-v` | Show configuration, file status, and help text |
 | `--quiet` | `-q` | Silent mode - no output, only exit codes |
 | `--succeed-always` | | Always exit 0, even with violations |
@@ -183,6 +172,7 @@ repos:
 - **Unstaged file violations** → ⚠️ Warning only (yellow warnings)
 - Unstaged violations don't affect exit code
 - Uses `grep` for efficient batch processing
+- Unstaged changes are stashed before pre-commit runs and will not be reflected in output.
 
 **Use cases:**
 - Get visibility into ALL TODOs in your codebase
@@ -243,73 +233,7 @@ repos:
         args: ['-t', 'PROJ', '-v']
 ```
 
-**Note:** Branch detection messages are shown in verbose mode.
-
-## Output Modes
-
-### Standard Mode (Default)
-
-Shows only violations with red ❌ marks, no success messages:
-
-```
-❌ file.py:15: # TODO: Missing ticket reference
-❌ file.py:23: # FIXME: Another violation
-```
-
-### Quiet Mode (`-q/--quiet`)
-
-Completely silent - no output, only exit codes:
-
-```yaml
-args: ['-t', 'MYPROJECT', '-q']
-```
-
-Perfect for:
-- CI/CD pipelines
-- Automated checks where output isn't needed
-- Integration with other tools
-
-### Verbose Mode (`-v/--verbose`)
-
-Shows configuration, violations, file status, and help text:
-
-```
-🔍 Checking work comments for ticket references to projects MYPROJECT...
-Checking for: TODO, FIXME, XXX, HACK
-
-❌ file.py:15: # TODO: Missing ticket reference
-
-⚠️  Unresolved TODOs for current branch ticket MYPROJECT-123:
-⚠️  auth.py:10: # TODO MYPROJECT-123: Complete OAuth implementation
-
-✅ clean_file.py
-❌ file.py
-
-💡 Please add ticket/issue references to work comments like:
-   // TODO MYPROJECT-123: Implement user authentication
-   # FIXME MYPROJECT-124: Handle edge case for empty input
-```
-
-## Valid vs Invalid Comments
-
-### ✅ Valid Comments
-
-```python
-# TODO MYPROJECT-123: Implement user authentication
-# FIXME GITHUB-456: Handle edge case for empty input
-/* HACK LINEAR-789: Temporary workaround for API issue */
-// XXX JIRA-100: This needs refactoring
-
-# TODO: This is excluded  # noqa
-```
-
-### ❌ Invalid Comments (Will Cause Failure)
-
-```python
-# TODO: Missing ticket reference
-# FIXME: Another comment without ticket
-# XXX Refactor this code
-```
+**Note:** Branch detection messages are shown only for included files. If `--check-unstaged` is not set, you will not have visibility into branch-specific TODO items in unstaged files. It is recommended to turn on unstaged files checking for this reason.
 
 ## Migration from 0.x to 1.0
 
@@ -416,81 +340,6 @@ prevent-dangling-todos --version
 ```
 
 For issues or feature requests, please visit: https://github.com/lasp/prevent-dangling-todos/issues
-
-## Examples by Use Case
-
-### For GitHub Issues
-
-```yaml
-repos:
-  - repo: https://github.com/lasp/prevent-dangling-todos
-    hooks:
-      - id: prevent-dangling-todos
-        args: ['-t', 'GITHUB']
-```
-
-### For Linear
-
-```yaml
-repos:
-  - repo: https://github.com/lasp/prevent-dangling-todos
-    hooks:
-      - id: prevent-dangling-todos
-        args: ['-t', 'LINEAR']
-```
-
-### For Multiple Projects
-
-```yaml
-repos:
-  - repo: https://github.com/lasp/prevent-dangling-todos
-    hooks:
-      - id: prevent-dangling-todos
-        args: ['-t', 'FRONTEND,BACKEND,INFRA']
-```
-
-### Python Files Only
-
-```yaml
-repos:
-  - repo: https://github.com/lasp/prevent-dangling-todos
-    hooks:
-      - id: prevent-dangling-todos
-        args: ['-t', 'MYPROJECT']
-        types: [python]
-```
-
-### Excluding Tests and Docs
-
-```yaml
-repos:
-  - repo: https://github.com/lasp/prevent-dangling-todos
-    hooks:
-      - id: prevent-dangling-todos
-        args: ['-t', 'MYPROJECT']
-        exclude: '^(tests/|docs/|examples/)'
-```
-
-### Check Only TODOs (Ignore FIXME, XXX, etc.)
-
-```yaml
-repos:
-  - repo: https://github.com/lasp/prevent-dangling-todos
-    hooks:
-      - id: prevent-dangling-todos
-        args: ['-t', 'MYPROJECT', '-c', 'TODO']
-```
-
-### Monitor All TODOs Without Blocking
-
-```yaml
-repos:
-  - repo: https://github.com/lasp/prevent-dangling-todos
-    hooks:
-      - id: prevent-dangling-todos
-        args: ['-t', 'MYPROJECT', '--succeed-always', '--check-unstaged', '-v']
-        verbose: true
-```
 
 ## Contributing
 

@@ -7,10 +7,11 @@ repos:
         entry: prevent-dangling-todos
         language: python
         types: [text]
-        args: ["--check-unstaged", "--comment-prefix=TODO"]
+        args: ["--check-unstaged", "-c", "TODO", "-t", "GITHUB", "-v"]
         files: '.*\.py'
         exclude: '^tests/.*$'
         always_run: true
+        verbose: true
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks

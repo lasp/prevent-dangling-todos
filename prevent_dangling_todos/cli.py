@@ -305,9 +305,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         branch_detection_msg = f"Note: {branch_error}"
     elif branch_name and final_ticket_prefixes:
         current_ticket_id = _extract_ticket_id(branch_name, final_ticket_prefixes)
-        if not current_ticket_id:
+        if not current_ticket_id and args.verbose:
             branch_detection_msg = (
-                f"Note: No ticket ID detected in current branch '{branch_name}'"
+                f"⚠️  No ticket ID detected in current branch '{branch_name}'"
             )
 
     # Initialize checker with configuration
