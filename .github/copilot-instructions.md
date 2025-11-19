@@ -214,7 +214,7 @@ def _build_patterns(self) -> None:
 
 ### Runtime (Minimal)
 - Python 3.10+
-- `identify>=2.0.0` - File type detection  
+- `identify>=2.0.0` - File type detection
 - `pyyaml>=6.0` - Config parsing
 
 ### Development

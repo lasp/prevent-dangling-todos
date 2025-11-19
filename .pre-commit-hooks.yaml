@@ -6,4 +6,3 @@
   types: [text]
   exclude: '^\.pre-commit-config\.yaml$'
   args: []
-

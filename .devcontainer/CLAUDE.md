@@ -201,7 +201,7 @@ repos:
     hooks:
       - id: prevent-dangling-todos
         args: ['-t', 'MYPROJECT']
-        
+
         # Optional: file filtering
         files: '^src/.*\.py$'
         exclude: '^(tests/|docs/)'
