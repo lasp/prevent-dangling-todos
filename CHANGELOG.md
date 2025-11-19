@@ -5,7 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
 ## [1.0.0] - Unreleased
+
+### Changed
+
+- **Migrated from Poetry to UV for dependency management**
+  - Replaced Poetry build backend with setuptools (PEP 621 compliant)
+  - Updated all CI/CD workflows to use UV's official GitHub Action (`astral-sh/setup-uv`)
+  - Updated development environment setup to use UV's recommended installation methods
+  - Removed Poetry references from documentation and devcontainer
+  - **For developers**: Use `uv sync --all-extras` instead of `poetry install`
+  - **For running commands**: Use `uv run <command>` (e.g., `uv run pytest`)
+  - **For CI**: Workflows now use `astral-sh/setup-uv` action with caching enabled
 
 ### Breaking Changes
 

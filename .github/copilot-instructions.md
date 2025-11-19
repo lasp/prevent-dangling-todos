@@ -214,7 +214,7 @@ def _build_patterns(self) -> None:
 
 ### Runtime (Minimal)
 - Python 3.10+
-- `identify>=2.0.0` - File type detection  
+- `identify>=2.0.0` - File type detection
 - `pyyaml>=6.0` - Config parsing
 
 ### Development
@@ -342,13 +342,13 @@ When suggesting code changes, always:
 
 | Task | Command |
 |------|---------|
-| Run tests | `pytest -v` |
-| Run with coverage | `pytest --cov=prevent_dangling_todos` |
-| Lint code | `ruff check . --fix` |
-| Format code | `ruff format .` |
-| Type check | `mypy prevent_dangling_todos` |
-| Install dev deps | `pip install -e .[dev]` or use poetry |
-| Run tool locally | `prevent-dangling-todos -t PREFIX file.py` |
+| Install dev deps | `uv sync --all-extras` |
+| Run tests | `uv run pytest -v` |
+| Run with coverage | `uv run pytest --cov=prevent_dangling_todos` |
+| Lint code | `uv run ruff check . --fix` |
+| Format code | `uv run ruff format .` |
+| Type check | `uv run mypy prevent_dangling_todos` |
+| Run tool locally | `uv run prevent-dangling-todos -t PREFIX file.py` |
 
 ---
 

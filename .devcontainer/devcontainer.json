@@ -1,14 +1,12 @@
 {
   "name": "Prevent Dangling TODOs",
   "build": {
-    "dockerfile": "Dockerfile",
-    "args": {
-      "USERNAME": "laspdev"
-    },
-    "platform": "linux/arm64",
-    "runArgs": ["--platform=${localEnv:DOCKER_PLATFORM:linux/arm64}"]
+    "dockerfile": "Dockerfile"
   },
-  "runArgs": ["--cap-add=NET_ADMIN", "--cap-add=NET_RAW"],
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW"
+  ],
   "customizations": {
     "vscode": {
       "extensions": [
@@ -28,10 +26,13 @@
       "settings": {
         "dev.containers.copyGitConfig": true,
         "python.terminal.activateEnvironment": false,
-        "python-envs.terminal.autoActivationType": "off",
+        "python-envs.terminal.autoActivationType": "command",
         "python.testing.pytestEnabled": true,
         "python.testing.unittestEnabled": false,
-        "python.testing.pytestArgs": ["-s", "."],
+        "python.testing.pytestArgs": [
+          "-s",
+          "."
+        ],
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {
           "source.organizeImports.ruff": "explicit"
@@ -44,10 +45,10 @@
       }
     }
   },
-  "remoteUser": "laspdev",
+  "remoteUser": "root",
   "remoteEnv": {
     "NODE_OPTIONS": "--max-old-space-size=4096",
-    "CLAUDE_CONFIG_DIR": "/home/laspdev/.claude",
+    "CLAUDE_CONFIG_DIR": "/root/.claude",
     "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
     "COMMIT_GPGSIGN": "true",
     "TAG_GPGSIGN": "true"

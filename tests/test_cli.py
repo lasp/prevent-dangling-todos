@@ -227,9 +227,7 @@ class TestCLI:
             with pytest.raises(SystemExit) as exc_info:
                 main([test_file])
 
-            assert (
-                exc_info.value.code == 1
-            )  # Should find TODO violations
+            assert exc_info.value.code == 1  # Should find TODO violations
             captured = capsys.readouterr()
             # Standard mode should show violations but not config info
             assert "❌" in captured.out
